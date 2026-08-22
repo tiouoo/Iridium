@@ -4,13 +4,19 @@ namespace Iridium.Helpers;
 
 public static class PlatformHelper {
     public static Architecture Architecture => RuntimeInformation.ProcessArchitecture;
+
+    public static string GetPlatformName() {
+        var os = OperatingSystem.IsWindows()
+            ? "windows"
+            : OperatingSystem.IsMacOS() 
+                ? "macos"
+                : "linux";
+        
+        return os;
+    }
     
     public static string GetPlatformInfo() {
-        var os = OperatingSystem.IsWindows() 
-            ? "windows" 
-            : OperatingSystem.IsMacOS() 
-                ? "osx" 
-                : "linux";
+        var os = GetPlatformName();
         
         var arch = Architecture switch {
             Architecture.X86 => "x86",

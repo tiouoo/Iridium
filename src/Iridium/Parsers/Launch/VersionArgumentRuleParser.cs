@@ -1,11 +1,20 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Iridium.Enums;
+using Iridium.Helpers;
 using Iridium.Models.Minecraft;
 
-namespace Iridium.Launch;
+namespace Iridium.Parsers.Launch;
 
 internal static class VersionArgumentRuleParser {
+    public static string GetCurrentOsArch() =>
+            PlatformHelper.Architecture switch {
+                Architecture.X86 => "x86",
+                Architecture.X64 => "x64",
+                Architecture.Arm64 => "arm64",
+                var architecture => architecture.ToString().ToLowerInvariant()
+            };
+    
     public static bool IsActive(IReadOnlyList<CompatibilityRule>? rules, Dictionary<string, bool> features) {
         if (rules is null || rules.Count == 0)
             return true;
@@ -23,54 +32,9 @@ internal static class VersionArgumentRuleParser {
 
         return allowed;
     }
-
-    private static bool IsMatched(CompatibilityRule rule, Dictionary<string, bool> features) {
-        if (rule.OsName is not null &&
-            !string.Equals(GetCurrentOsName(), rule.OsName, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (rule.OsVersion is not null &&
-            !Regex.IsMatch(Environment.OSVersion.Version.ToString(), rule.OsVersion))
-        {
-            return false;
-        }
-
-        if (rule.OsArch is not null &&
-            !string.Equals(GetCurrentOsArch(), rule.OsArch, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (rule.Features is null)
-            return true;
-
-        foreach (var (key, value) in rule.Features) {
-            if (!features.TryGetValue(key, out var current) || current != value)
-                return false;
-        }
-
-        return true;
-    }
-
-    public static string GetCurrentOsName() =>
-        OperatingSystem.IsWindows()
-            ? "windows"
-            : OperatingSystem.IsMacOS()
-                ? "osx"
-                : "linux";
-
-    public static string GetCurrentOsArch() =>
-        RuntimeInformation.ProcessArchitecture switch {
-            Architecture.X86 => "x86",
-            Architecture.X64 => "x64",
-            Architecture.Arm64 => "arm64",
-            var architecture => architecture.ToString().ToLowerInvariant()
-        };
-
+    
     public static string? GetNativeClassifier(IReadOnlyDictionary<string, string> natives) {
-        var os = GetCurrentOsName();
+        var os = PlatformHelper.GetPlatformName();
         var archKey = RuntimeInformation.ProcessArchitecture switch {
             Architecture.Arm64 => $"{os}-arm64",
             Architecture.Arm => $"{os}-arm32",
@@ -85,4 +49,27 @@ internal static class VersionArgumentRuleParser {
 
         return null;
     }
+    
+    private static bool IsMatched(CompatibilityRule rule, Dictionary<string, bool> features) {
+            if (rule.OsName is not null &&
+                !string.Equals(PlatformHelper.GetPlatformName(), rule.OsName, StringComparison.OrdinalIgnoreCase))
+                return false;
+    
+            if (rule.OsVersion is not null &&
+                !Regex.IsMatch(Environment.OSVersion.Version.ToString(), rule.OsVersion))
+                return false;
+    
+            if (rule.OsArch is not null &&
+                !string.Equals(GetCurrentOsArch(), rule.OsArch, StringComparison.OrdinalIgnoreCase))
+                return false;
+    
+            if (rule.Features is null)
+                return true;
+    
+            foreach (var (key, value) in rule.Features)
+                if (!features.TryGetValue(key, out var current) || current != value)
+                    return false;
+    
+            return true;
+        }
 }

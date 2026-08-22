@@ -1,7 +1,9 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Iridium.Enums;
+using Iridium.Helpers;
 using Iridium.Interfaces.Launch;
 using Iridium.Interfaces.Minecraft;
 using Iridium.Launch;
@@ -368,8 +370,7 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         if (value.IndexOf("${", StringComparison.Ordinal) < 0)
             return value;
 
-        return PlaceholderRegex().Replace(
-            value,
+        return PlaceholderRegex().Replace(value,
             match => replacements.TryGetValue(match.Groups[1].Value, out var replacement)
                 ? replacement
                 : match.Value);
@@ -445,3 +446,4 @@ internal static class JvmArgumentParser {
         }
     }
 }
+

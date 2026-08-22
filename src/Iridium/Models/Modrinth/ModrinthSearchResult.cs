@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace Iridium.Models.Modrinth;
 
-
 public sealed record ModrinthSearchHit {
     [JsonPropertyName("project_id")] public string? ProjectId { get; init; }
     [JsonPropertyName("project_type")] public string? ProjectType { get; init; }
@@ -26,10 +25,13 @@ public sealed record ModrinthSearchHit {
     [JsonPropertyName("featured_gallery")] public string? FeaturedGallery { get; init; }
 }
 
-
 public sealed record ModrinthSearchResult {
-    [JsonPropertyName("hits")] public List<ModrinthSearchHit> Hits { get; init; } = [];
-    [JsonPropertyName("offset")] public int Offset { get; init; }
     [JsonPropertyName("limit")] public int Limit { get; init; }
+    [JsonPropertyName("offset")] public int Offset { get; init; }
     [JsonPropertyName("total_hits")] public long TotalHits { get; init; }
+    
+    [JsonPropertyName("hits")] public IReadOnlyList<ModrinthSearchHit>? Hits { get; init; }
 }
+
+[JsonSerializable(typeof(ModrinthSearchResult))]
+public sealed partial class ModrinthSearchResultCotext : JsonSerializerContext;
