@@ -3,6 +3,8 @@ using Iridium.Enums.Resources;
 namespace Iridium.Models.Resources;
 
 public sealed class ResourceSearchOptions {
+    public ResourceSource Source { get; init; } = ResourceSource.All;
+
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 40;
     

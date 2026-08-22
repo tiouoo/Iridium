@@ -22,7 +22,7 @@ public partial class ModrinthClient {
             .SetQueryParam("facets", ModrinthRequestBuilder.BuildFacets(options));
 
         if (offset > 0)
-            url = url.SetQueryParam("offset", offset);
+            url = url.SetQueryParam("offset", 0);
 
         if (!string.IsNullOrWhiteSpace(options.Query))
             url = url.SetQueryParam("query", options.Query);

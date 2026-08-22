@@ -1,27 +1,40 @@
 ﻿using Iridium;
-using Iridium.Download;
+using Iridium.Enums.ResourceCategories;
 using Iridium.Enums.Resources;
-using Iridium.Interfaces.Resources;
 using Iridium.Models;
-using Iridium.Models.Resources;
-using Iridium.Providers.Resource.Modrinth;
+using Iridium.Providers.Resource;
 
 IridiumConfig.Configure(new IridiumContext());
 
-var client = new ModrinthClient(ResourceApiSource.Official);
+var provider = new ResourceProvider(curseForgeApiKey: "");
+var result = await provider.SearchAsync(configure => configure
+    .Query("jei")
+    .GameVersion("1.20.1")
+    .Loader(ResourceLoaderType.Forge)
+    .Ordering(SortOrder.Desc)
+    .Page(3)
+    .PageSize(20));
 
-var result = await client.SearchAsync(new ResourceSearchOptions {
-    Type = ResourceType.Mod,
-    Page = 2,
-    PageSize = 10
-});
-
-Console.WriteLine($"{result.TotalCount} items found, Page Index {result.Page}, Page Size {result.PageSize}");
 foreach (var hit in result.Items) {
-    Console.WriteLine($"{hit.Title} | {hit.Slug} | {hit.Downloads}");
+    Console.WriteLine($"{hit.Title} -- {hit.Type} -- {hit.Author} -- {hit.Source}");
 }
 
+Console.WriteLine("Done!");
 Console.ReadKey();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Console.Write("Enter .minecraft folder path: ");
 // var mcPath = @"D:\Temp\新建文件夹 (9)";

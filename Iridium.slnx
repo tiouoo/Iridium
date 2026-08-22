@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/SourceGenerator/">
+    <Project Path="src/Iridium.SourceGenerators/Iridium.SourceGenerators.csproj" />
+  </Folder>
   <Folder Name="/test/">
     <Project Path="src/Iridium.Sample/Iridium.Sample.csproj" />
     <Project Path="src/Iridium.ResourceSample/Iridium.ResourceSample.csproj" />
