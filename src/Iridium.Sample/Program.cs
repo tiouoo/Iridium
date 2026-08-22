@@ -1,26 +1,24 @@
-﻿using System.Diagnostics;
-using Iridium;
+﻿using Iridium;
 using Iridium.Download;
 using Iridium.Enums.Resources;
-using Iridium.Helpers;
-using Iridium.Installation;
-using Iridium.Launch;
+using Iridium.Interfaces.Resources;
 using Iridium.Models;
-using Iridium.Models.Launch;
 using Iridium.Models.Resources;
-using Iridium.Providers.Java;
-using Iridium.Providers.Modrinth;
-using Iridium.Services.Authentication;
+using Iridium.Providers.Resource.Modrinth;
 
 IridiumConfig.Configure(new IridiumContext());
 
-ModrinthClient client = new(ResourceApiSource.Official);
+var client = new ModrinthClient(ResourceApiSource.Official);
 
-var result = await client.SearchAsync(new ResourceSearchOptions() {
-    Type = ResourceType.Mod
+var result = await client.SearchAsync(new ResourceSearchOptions {
+    Type = ResourceType.Mod,
+    Page = 2,
+    PageSize = 10
 });
-foreach (var hit in result.Hits) {
-    Console.WriteLine(hit);
+
+Console.WriteLine($"{result.TotalCount} items found, Page Index {result.Page}, Page Size {result.PageSize}");
+foreach (var hit in result.Items) {
+    Console.WriteLine($"{hit.Title} | {hit.Slug} | {hit.Downloads}");
 }
 
 Console.ReadKey();

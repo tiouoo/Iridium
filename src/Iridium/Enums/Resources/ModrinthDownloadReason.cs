@@ -1,6 +1,5 @@
 namespace Iridium.Enums.Resources;
 
-
 public enum ModrinthDownloadReason {
     Standalone,
     Dependency,

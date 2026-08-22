@@ -2,7 +2,6 @@ namespace Iridium.Helpers.Resources;
 
 
 public static class CurseForgeFingerprintHelper {
-
     public static uint Compute(ReadOnlySpan<byte> bytes) {
         Span<byte> buffer = bytes.Length <= 8192 ? stackalloc byte[bytes.Length] : new byte[bytes.Length];
         var length = 0;
@@ -14,15 +13,13 @@ public static class CurseForgeFingerprintHelper {
 
         return MurmurHash2(buffer[..length]);
     }
-
-
+    
     public static async Task<uint> ComputeAsync(Stream stream, CancellationToken cancellationToken = default) {
         using var buffer = new MemoryStream();
         await stream.CopyToAsync(buffer, cancellationToken);
         return Compute(buffer.ToArray());
     }
-
-
+    
     public static uint MurmurHash2(ReadOnlySpan<byte> data, uint seed = 1) {
         const uint multiplier = 0x5BD1E995;
         const int rotation = 24;

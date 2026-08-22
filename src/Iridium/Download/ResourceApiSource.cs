@@ -10,13 +10,13 @@ public class ResourceApiSource {
 
     public static ResourceApiSource Official { get; } = new("Official", builder => builder switch {
         ResourceApiType.Modrinth => "https://api.modrinth.com/v2",
-        ResourceApiType.Curseforge => "https://api.curseforge.com/v1",
+        ResourceApiType.CurseForge => "https://api.curseforge.com/v1",
         _ => throw new InvalidOperationException()
     });
 
     public static ResourceApiSource Mcim { get; } = new("Mcim", builder => builder switch {
         ResourceApiType.Modrinth => "https://mod.mcimirror.top/modrinth/v2",
-        ResourceApiType.Curseforge => "https://mod.mcimirror.top/curseforge/v1",
+        ResourceApiType.CurseForge => "https://mod.mcimirror.top/curseforge/v1",
         _ => throw new InvalidOperationException()
     });
     

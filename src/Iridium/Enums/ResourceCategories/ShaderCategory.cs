@@ -1,4 +1,5 @@
 ﻿using Iridium.Enums.Resources;
+using Iridium.Models.Attributes;
 
 namespace Iridium.Enums.ResourceCategories;
 
