@@ -54,7 +54,7 @@ public sealed class StandardMinecraftProvider : IMinecraftProvider {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
-        var entry = VersionJsonParser.MapEntry(root, dir.Name);
+        var entry = await ResolveInheritedEntryAsync(dir.Name, root, cancellationToken);
         return entry with {
             MinecraftVersion = await ResolveVersionAsync(entry.Id, root, cancellationToken),
             RequiredJavaVersion = await ResolveJavaVersionAsync(root, cancellationToken),
@@ -62,6 +62,54 @@ public sealed class StandardMinecraftProvider : IMinecraftProvider {
             Format = MinecraftFormat.Standard,
             Loaders = ModLoaderDetector.DetectFromLibraries(
                 root.TryGetProperty("libraries", out var librariesElement) ? librariesElement : default)
+        };
+    }
+
+    private async Task<MinecraftEntry> ResolveInheritedEntryAsync(
+        string fallbackId, JsonElement root, CancellationToken cancellationToken, int depth = 0)
+    {
+        var entry = VersionJsonParser.MapEntry(root, fallbackId);
+        if (depth >= 16 || entry.InheritsFrom is not { Length: > 0 } parentId)
+            return entry;
+
+        var parentJsonPath = Path.Combine(_root.FullName, "versions", parentId, $"{parentId}.json");
+        if (!File.Exists(parentJsonPath))
+            return entry;
+
+        var parentJson = await File.ReadAllTextAsync(parentJsonPath, cancellationToken);
+        using var parentDocument = JsonDocument.Parse(parentJson);
+        var parent = await ResolveInheritedEntryAsync(parentId, parentDocument.RootElement, cancellationToken, depth + 1);
+
+        var libraries = parent.Libraries.ToList();
+        foreach (var library in entry.Libraries)
+            VersionJsonParser.AddLibrary(libraries, library);
+
+        var arguments = MergeArguments(parent.Arguments, entry.Arguments);
+        return entry with {
+            MainClass = entry.MainClass ?? parent.MainClass,
+            MinecraftArguments = entry.MinecraftArguments ?? parent.MinecraftArguments,
+            Arguments = arguments,
+            Libraries = libraries,
+            AssetIndex = entry.AssetIndex ?? parent.AssetIndex,
+            AssetIndexUrl = entry.AssetIndexUrl ?? parent.AssetIndexUrl,
+            ClientDownload = entry.ClientDownload ?? parent.ClientDownload,
+            Jar = entry.Jar ?? parent.Jar,
+            RequiredJavaVersion = entry.RequiredJavaVersion ?? parent.RequiredJavaVersion,
+            Type = entry.Type == MinecraftVersionType.Release && parent.Type != MinecraftVersionType.Release
+                ? parent.Type
+                : entry.Type,
+            ReleaseTime = entry.ReleaseTime ?? parent.ReleaseTime
+        };
+    }
+
+    private static MinecraftArguments? MergeArguments(MinecraftArguments? parent, MinecraftArguments? child)
+    {
+        if (parent is null) return child;
+        if (child is null) return parent;
+
+        return new MinecraftArguments {
+            Game = [.. parent.Game, .. child.Game],
+            Jvm = [.. parent.Jvm, .. child.Jvm]
         };
     }
 
