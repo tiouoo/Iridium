@@ -6,22 +6,6 @@ using Iridium.Interfaces.Resources;
 
 namespace Iridium.Download;
 
-/// <summary>
-/// Global download-source selection for Iridium.
-///
-/// Modes:
-/// <list type="bullet">
-/// <item><see cref="SourceSelectionMode.Auto"/> — latency-probes each candidate once
-/// (cached per host for <see cref="ProbeTtl"/>) and orders by measured speed.</item>
-/// <item><see cref="SourceSelectionMode.OfficialPreferred"/>/<see cref="SourceSelectionMode.MirrorPreferred"/>
-/// — orders the two candidates by preference.</item>
-/// <item><see cref="SourceSelectionMode.OfficialOnly"/> — never touches a mirror and skips probing.</item>
-/// </list>
-///
-/// Probing is deliberately cheap and rare: one HEAD per host, cached, single-flight, so bulk
-/// downloads never re-measure per file. Actual request timeouts fall back to the other
-/// candidate, alternating up to <see cref="MaxAttempts"/>.
-/// </summary>
 public static class SourceSelector {
     private static readonly ConcurrentDictionary<string, CachedProbe> ProbeCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SemaphoreSlim ProbeLock = new(1, 1);
@@ -39,13 +23,8 @@ public static class SourceSelector {
 
     public static int MaxAttempts => _maxAttempts;
 
-    /// <summary>Mirror used for game-file downloads (libraries/assets). Defaults to BMCLAPI.</summary>
     public static DownloadSource GameFileMirrorSource { get; set; } = DownloadSource.BmclApi;
 
-    /// <summary>
-    /// Active resource-file CDN mirror (e.g. the temporary "Tianpao" source). When null,
-    /// resource file URLs are never rewritten.
-    /// </summary>
     public static IResourceMirror? ResourceMirror { get; set; }
 
     public static void Configure(
@@ -62,10 +41,6 @@ public static class SourceSelector {
             _maxAttempts = Math.Max(1, attempts);
     }
 
-    /// <summary>
-    /// Orders the primary (official) and mirror candidate URLs for download according to the
-    /// current mode. Returns a single-element list when there is no mirror.
-    /// </summary>
     public static async Task<IReadOnlyList<string>> OrderUrlsAsync(
         string primary,
         string? mirror,
@@ -89,7 +64,6 @@ public static class SourceSelector {
         var primaryProbe = await ProbeAsync(primary, cancellationToken);
         var mirrorProbe = await ProbeAsync(mirror, cancellationToken);
 
-        // A reachable candidate always wins over an unreachable one.
         if (primaryProbe.LatencyMs is null && mirrorProbe.LatencyMs is null)
             return [primary, mirror];
         if (primaryProbe.LatencyMs is null)
@@ -107,7 +81,6 @@ public static class SourceSelector {
         if (ProbeCache.TryGetValue(host, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
             return cached;
 
-        // Single-flight per host so a burst of downloads never hammers the mirrors.
         await ProbeLock.WaitAsync(cancellationToken);
         try {
             if (ProbeCache.TryGetValue(host, out cached) && cached.ExpiresAt > DateTime.UtcNow)
@@ -134,7 +107,6 @@ public static class SourceSelector {
             if (response.ResponseMessage.IsSuccessStatusCode)
                 latency = stopwatch.ElapsedMilliseconds;
         } catch {
-            // Unreachable host; the download fallback chain will handle it.
         }
 
         return new CachedProbe(latency, DateTime.UtcNow + _probeTtl);

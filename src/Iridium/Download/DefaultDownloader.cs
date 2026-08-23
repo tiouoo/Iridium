@@ -234,8 +234,6 @@ public sealed class DefaultDownloader : IDisposable {
             return;
         }
 
-        // Timeout-based failover: on failure/timeout try the next candidate, alternating
-        // back and forth until MaxAttempts is exhausted.
         Exception? lastException = null;
         for (var attempt = 0; attempt < SourceSelector.MaxAttempts; attempt++) {
             var url = candidates[attempt % candidates.Count];
@@ -271,8 +269,6 @@ public sealed class DefaultDownloader : IDisposable {
         if (unique.Length == 0)
             return [request.Url];
 
-        // The first alternate is the primary mirror candidate; ordering by mode (including
-        // latency probing in Auto) decides which URL is tried first.
         var ordered = await SourceSelector.OrderUrlsAsync(request.Url, unique[0], cancellationToken)
             .ConfigureAwait(false);
 

@@ -127,9 +127,6 @@ public sealed class ResourceDownloader : IDisposable {
             Size = file.Size
         };
 
-        // Mojang-hosted game files (libraries/assets/client) gain a mirror candidate so
-        // SourceSelector can pick the faster one and fall back on timeout. Third-party
-        // metadata hosts (Forge etc.) and the asset index are left untouched.
         if (file.Type != DownloadFileType.AssetIndex && IsMojangHosted(file.Url)) {
             var mirrorUrl = SourceSelector.GameFileMirrorSource.GetUrl(file);
             if (!string.Equals(file.Url, mirrorUrl, StringComparison.OrdinalIgnoreCase))

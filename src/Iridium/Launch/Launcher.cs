@@ -47,8 +47,6 @@ public sealed class Launcher {
         ProcessStartInfo startInfo;
 
         if (!string.IsNullOrWhiteSpace(config.WrapperCommand)) {
-            // Wrap the whole java invocation in the configured command template
-            // (supports a {command} placeholder), mirroring the legacy behavior.
             var javaCommand = $"\"{javaPath}\" {string.Join(' ', launchArgs)}";
             var wrapped = config.WrapperCommand.Contains("{command}", StringComparison.Ordinal)
                 ? config.WrapperCommand.Replace("{command}", javaCommand)
