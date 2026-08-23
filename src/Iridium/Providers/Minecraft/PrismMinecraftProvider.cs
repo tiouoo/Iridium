@@ -8,7 +8,12 @@ using Iridium.Parsers.Minecraft;
 
 namespace Iridium.Providers.Minecraft;
 
-internal sealed class PrismMinecraftProvider : IMinecraftProvider {
+/// <summary>
+/// Scans the shared instances/ layout used by MultiMC, Prism Launcher and BakaXL: every
+/// instance lives under an <c>instances/</c> directory and carries a manifest
+/// (<c>mmc-pack.json</c> or <c>package.info</c>) declaring its components.
+/// </summary>
+public sealed class PrismMinecraftProvider : IMinecraftProvider {
     private readonly DirectoryInfo _root;
 
     public PrismMinecraftProvider(DirectoryInfo root) {
@@ -41,7 +46,11 @@ internal sealed class PrismMinecraftProvider : IMinecraftProvider {
     }
 
     private async Task<MinecraftEntry?> ParseAsync(DirectoryInfo dir, CancellationToken cancellationToken) {
+        // MultiMC / Prism use mmc-pack.json while BakaXL uses package.info; both carry the
+        // same components structure.
         var packPath = Path.Combine(dir.FullName, "mmc-pack.json");
+        if (!File.Exists(packPath))
+            packPath = Path.Combine(dir.FullName, "package.info");
         if (!File.Exists(packPath))
             return null;
 
@@ -182,6 +191,7 @@ internal sealed class PrismMinecraftProvider : IMinecraftProvider {
                         : null;
 
                 merged = merged with {
+                    RequiredJavaVersion = VersionJsonParser.MapJavaVersion(minecraftRootElement),
                     Arguments = VersionJsonParser.MapArguments(minecraftRootElement),
                     AssetIndex = assetIndex.TryGetProperty("id", out var assetId)
                         && assetId.GetString() is { Length: > 0 } assetIndexId
@@ -285,6 +295,18 @@ internal sealed class PrismMinecraftProvider : IMinecraftProvider {
     }
 
     private static string GetInstanceName(DirectoryInfo dir) {
+        // BakaXL puts the display name inside package.info.
+        var packPath = Path.Combine(dir.FullName, "package.info");
+        if (File.Exists(packPath)) {
+            try {
+                using var document = JsonDocument.Parse(File.ReadAllText(packPath));
+                if (document.RootElement.TryGetProperty("name", out var name) &&
+                    name.GetString() is { Length: > 0 } value)
+                    return value;
+            } catch (JsonException) {
+            }
+        }
+
         var cfgPath = Path.Combine(dir.FullName, "instance.cfg");
         if (!File.Exists(cfgPath))
             return dir.Name;

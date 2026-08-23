@@ -6,7 +6,11 @@ using Iridium.Parsers.Minecraft;
 
 namespace Iridium.Providers.Minecraft;
 
-internal sealed class StandardMinecraftProvider : IMinecraftProvider {
+/// <summary>
+/// Scans the traditional launcher layout where every version lives under a
+/// <c>versions/</c> directory ({root}/versions/{id}/{id}.json).
+/// </summary>
+public sealed class StandardMinecraftProvider : IMinecraftProvider {
     private readonly DirectoryInfo _root;
 
     public StandardMinecraftProvider(DirectoryInfo root) {
@@ -53,6 +57,7 @@ internal sealed class StandardMinecraftProvider : IMinecraftProvider {
         var entry = VersionJsonParser.MapEntry(root, dir.Name);
         return entry with {
             MinecraftVersion = await ResolveVersionAsync(entry.Id, root, cancellationToken),
+            RequiredJavaVersion = await ResolveJavaVersionAsync(root, cancellationToken),
             InstancePath = dir.FullName,
             Format = MinecraftFormat.Standard,
             Loaders = ModLoaderDetector.DetectFromLibraries(
@@ -94,5 +99,27 @@ internal sealed class StandardMinecraftProvider : IMinecraftProvider {
         }
 
         return fallbackId;
+    }
+
+    private async Task<int?> ResolveJavaVersionAsync(JsonElement root, CancellationToken cancellationToken, int depth = 0) {
+        if (depth > 8)
+            return null;
+
+        // The declared javaVersion is authoritative; loaders (Forge etc.) often inherit it
+        // from the vanilla version they extend, so keep walking the chain while it is absent.
+        if (VersionJsonParser.MapJavaVersion(root) is { } required)
+            return required;
+
+        if (root.TryGetProperty("inheritsFrom", out var inherits) && inherits.GetString() is { Length: > 0 } parentId) {
+            var parentJsonPath = Path.Combine(_root.FullName, "versions", parentId, $"{parentId}.json");
+
+            if (File.Exists(parentJsonPath)) {
+                var parentJson = await File.ReadAllTextAsync(parentJsonPath, cancellationToken);
+                using var parentDocument = JsonDocument.Parse(parentJson);
+                return await ResolveJavaVersionAsync(parentDocument.RootElement, cancellationToken, depth + 1);
+            }
+        }
+
+        return null;
     }
 }

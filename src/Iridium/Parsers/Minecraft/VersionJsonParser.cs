@@ -15,6 +15,15 @@ internal static class VersionJsonParser {
         };
     }
     
+    public static int? MapJavaVersion(JsonElement root) {
+        if (!root.TryGetProperty("javaVersion", out var javaVersion) ||
+            javaVersion.TryGetProperty("majorVersion", out var major) is false ||
+            major.TryGetInt32(out var value) is false)
+            return null;
+
+        return value;
+    }
+
     public static MinecraftVersionType MapType(JsonElement root) {
         if (!root.TryGetProperty("type", out var type) || type.GetString() is not { } value)
             return MinecraftVersionType.Release;
@@ -48,6 +57,7 @@ internal static class VersionJsonParser {
         return new MinecraftEntry {
             Id = id,
             Name = id,
+            RequiredJavaVersion = MapJavaVersion(root),
             MainClass = root.TryGetProperty("mainClass", out var mainClass) ? mainClass.GetString() : null,
             MinecraftArguments = root.TryGetProperty("minecraftArguments", out var minecraftArguments) ? minecraftArguments.GetString() : null,
             Arguments = MapArguments(root),

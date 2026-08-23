@@ -8,6 +8,12 @@ public sealed record MinecraftEntry {
     public string InstancePath { get; init; } = string.Empty;
     public string MinecraftVersion { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The Java major version the version manifest declares, resolved through the
+    /// inheritance chain. Null when the manifest carries no explicit requirement.
+    /// </summary>
+    public int? RequiredJavaVersion { get; init; }
+
     public MinecraftFormat Format { get; init; }
 
     public AssetIndex? AssetIndex { get; init; }

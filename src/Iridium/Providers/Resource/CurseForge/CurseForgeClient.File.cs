@@ -36,7 +36,7 @@ public partial class CurseForgeClient {
         
         async Task<(List<CurseForgeFile> Files, int TotalCount)> GetPageAsync(int index, CancellationToken token) {
             var url = BaseUrl.AppendPathSegments("mods", modId, "files")
-                .SetQueryParam("index", index)
+                .SetQueryParam("index", index * PageSize)
                 .SetQueryParam("pageSize", PageSize);
             
             if (!string.IsNullOrWhiteSpace(gameVersion))
