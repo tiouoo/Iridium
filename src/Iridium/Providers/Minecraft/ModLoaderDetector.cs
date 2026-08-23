@@ -5,15 +5,21 @@ using Iridium.Models.Minecraft;
 
 namespace Iridium.Providers.Minecraft;
 
-internal static class ModLoaderDetector {
+/// <summary>
+/// Detects mod loaders from a version manifest's Maven library coordinates or from
+/// Prism-style component UIDs.
+/// </summary>
+public static class ModLoaderDetector {
     private static readonly FrozenDictionary<string, (LoaderType Type, Func<string, string> ParseVersion)> LibraryPatterns =
         new Dictionary<string, (LoaderType, Func<string, string>)>(StringComparer.OrdinalIgnoreCase) {
             { "net.minecraftforge:forge:", (LoaderType.Forge, ForgeVersion) },
             { "net.minecraftforge:fmlloader:", (LoaderType.Forge, ForgeVersion) },
+            { "net.minecraftforge:fmlcore:", (LoaderType.Forge, ForgeVersion) },
             { "net.neoforged.fancymodloader:loader:", (LoaderType.NeoForge, static v => v) },
             { "net.neoforged:neoforge:", (LoaderType.NeoForge, static v => v) },
             { "optifine:optifine", (LoaderType.Optifine, AfterFirstUnderscoreUpper) },
             { "net.fabricmc:fabric-loader:", (LoaderType.Fabric, static v => v) },
+            { "net.fabricmc:fabric-api:", (LoaderType.Fabric, static v => v) },
             { "com.mumfrey:liteloader:", (LoaderType.LiteLoader, static v => v) },
             { "org.quiltmc:quilt-loader:", (LoaderType.Quilt, static v => v) },
         }.ToFrozenDictionary();
@@ -28,8 +34,12 @@ internal static class ModLoaderDetector {
             { "com.mumfrey.liteloader", LoaderType.LiteLoader },
         }.ToFrozenDictionary();
 
-    public static List<MinecraftLoader> DetectFromLibraries(JsonElement libraries) {
-        var loaders = new List<MinecraftLoader>();
+    public static List<MinecraftLoader> DetectFromLibraries(JsonElement libraries) =>
+        DetectFromLibraries(libraries, []);
+
+    public static List<MinecraftLoader> DetectFromLibraries(JsonElement libraries, IReadOnlyList<MinecraftLoader> existing) {
+        var loaders = new List<MinecraftLoader>(existing);
+        var seen = new HashSet<string>(loaders.Select(l => $"{l.Type}:{l.Version}"));
         if (libraries.ValueKind != JsonValueKind.Array)
             return loaders;
 
@@ -40,7 +50,7 @@ internal static class ModLoaderDetector {
                 continue;
 
             var loader = DetectFromLibraryName(libName);
-            if (loader is null || loaders.Contains(loader))
+            if (loader is null || !seen.Add($"{loader.Type}:{loader.Version}"))
                 continue;
 
             loaders.Add(loader);

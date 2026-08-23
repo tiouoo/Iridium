@@ -1,8 +1,8 @@
+using Iridium.Extension.Providers.Minecraft.CurseForge;
+using Iridium.Extension.Providers.Minecraft.Modrinth;
+using Iridium.Extension.Providers.Minecraft.PortalMc;
 using Iridium.Interfaces.Minecraft;
 using Iridium.Providers.Minecraft;
-using Iridium.Sample.Providers.CurseForge;
-using Iridium.Sample.Providers.Modrinth;
-using Iridium.Sample.Providers.PortalMc;
 
 namespace Iridium.Sample;
 

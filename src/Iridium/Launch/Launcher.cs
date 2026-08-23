@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Iridium.Download;
 using Iridium.Extensions;
 using Iridium.Installation;
@@ -45,14 +46,18 @@ public sealed class Launcher {
         var startInfo = new ProcessStartInfo(config.JavaPath.JavaPath) {
             WorkingDirectory = directories.GameDirectory,
             UseShellExecute = false,
+            CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.Default,
+            StandardErrorEncoding = Encoding.Default
         };
         foreach (var argument in launchArgs)
             startInfo.ArgumentList.Add(argument);
-        
+
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start Minecraft process: {startInfo.FileName}");
+        process.EnableRaisingEvents = true;
 
         return new MinecraftProcess(process, launchArgs);
     }

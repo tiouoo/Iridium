@@ -249,7 +249,10 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
             ["classpath"] = classpath,
             ["primary_jar"] = paths.VersionJarPath,
             ["primary_jar_name"] = Path.GetFileName(paths.VersionJarPath),
-            ["version_name"] = entry.VersionId.Length > 0 ? entry.VersionId : entry.MinecraftVersion.Length > 0 ? entry.MinecraftVersion : entry.Id,
+            // NeoForge's generated manifests use ${version_name}.jar in ignoreList to
+            // exclude the instance jar. That file is named after the entry id, while
+            // MinecraftVersion is the underlying game version (for example 1.21.1).
+            ["version_name"] = entry.Id,
             ["natives_directory"] = paths.NativesDirectory
         };
 
@@ -295,13 +298,7 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         var result = new List<string>(entry.Libraries.Count);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var library in entry.Libraries) {
-            // Explicit classifier entries (lwjgl-tinyfd:...:natives-windows) stay on the
-            // classpath: LWJGL and Netty extract their natives from there at runtime, and
-            // modern version JSONs point -Djava.library.path at launcher-managed folders
-            // that would otherwise be empty. Only the legacy "natives" dictionary form is
-            // handled by the launcher-side native extraction step.
-            if (library.Natives is { Count: > 0 } ||
-                !VersionArgumentRuleParser.IsActive(library.Rules, features))
+            if (!VersionArgumentRuleParser.IsActive(library.Rules, features))
                 continue;
 
             if (ResolveLibraryPath(paths.LibrariesRoot, library.Name) is { } path && seen.Add(path))
