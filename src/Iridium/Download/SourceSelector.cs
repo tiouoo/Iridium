@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Flurl.Http;
 using Iridium.Enums;
 using Iridium.Interfaces.Resources;
+using Iridium.Enums.Resources;
 
 namespace Iridium.Download;
 
@@ -27,6 +28,9 @@ public static class SourceSelector {
 
     public static IResourceMirror? ResourceMirror { get; set; }
 
+    private static SourceSelectionMode _modrinthResourceMode = SourceSelectionMode.Auto;
+    private static SourceSelectionMode _curseForgeResourceMode = SourceSelectionMode.Auto;
+
     public static void Configure(
         SourceSelectionMode mode,
         TimeSpan? probeTimeout = null,
@@ -41,19 +45,35 @@ public static class SourceSelector {
             _maxAttempts = Math.Max(1, attempts);
     }
 
+    public static void ConfigureResourceMirror(ResourceSource source, SourceSelectionMode mode) {
+        if (source == ResourceSource.Modrinth)
+            _modrinthResourceMode = mode;
+        else if (source == ResourceSource.CurseForge)
+            _curseForgeResourceMode = mode;
+    }
+
     public static async Task<IReadOnlyList<string>> OrderUrlsAsync(
         string primary,
         string? mirror,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default,
+        SourceSelectionMode? mode = null) {
         if (string.IsNullOrWhiteSpace(mirror) ||
             string.Equals(primary, mirror, StringComparison.OrdinalIgnoreCase))
             return [primary];
 
-        return _mode switch {
+        return (mode ?? _mode) switch {
             SourceSelectionMode.OfficialOnly => [primary],
             SourceSelectionMode.OfficialPreferred => [primary, mirror],
             SourceSelectionMode.MirrorPreferred => [mirror, primary],
             _ => await OrderByLatencyAsync(primary, mirror, cancellationToken)
+        };
+    }
+
+    public static SourceSelectionMode GetResourceMode(string url) {
+        return ResourceMirror?.GetSource(url) switch {
+            ResourceSource.Modrinth => _modrinthResourceMode,
+            ResourceSource.CurseForge => _curseForgeResourceMode,
+            _ => _mode
         };
     }
 

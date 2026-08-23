@@ -269,7 +269,8 @@ public sealed class DefaultDownloader : IDisposable {
         if (unique.Length == 0)
             return [request.Url];
 
-        var ordered = await SourceSelector.OrderUrlsAsync(request.Url, unique[0], cancellationToken)
+        var ordered = await SourceSelector.OrderUrlsAsync(request.Url, unique[0], cancellationToken,
+                SourceSelector.GetResourceMode(request.Url))
             .ConfigureAwait(false);
 
         return unique.Length > 1 ? [.. ordered, .. unique.Skip(1)] : ordered;
