@@ -65,9 +65,7 @@ public sealed class StandardMinecraftProvider : IMinecraftProvider {
         };
     }
 
-    private async Task<MinecraftEntry> ResolveInheritedEntryAsync(
-        string fallbackId, JsonElement root, CancellationToken cancellationToken, int depth = 0)
-    {
+    private async Task<MinecraftEntry> ResolveInheritedEntryAsync(string fallbackId, JsonElement root, CancellationToken cancellationToken, int depth = 0) {
         var entry = VersionJsonParser.MapEntry(root, fallbackId);
         if (depth >= 16 || entry.InheritsFrom is not { Length: > 0 } parentId)
             return entry;
@@ -102,8 +100,7 @@ public sealed class StandardMinecraftProvider : IMinecraftProvider {
         };
     }
 
-    private static MinecraftArguments? MergeArguments(MinecraftArguments? parent, MinecraftArguments? child)
-    {
+    private static MinecraftArguments? MergeArguments(MinecraftArguments? parent, MinecraftArguments? child) {
         if (parent is null) return child;
         if (child is null) return parent;
 

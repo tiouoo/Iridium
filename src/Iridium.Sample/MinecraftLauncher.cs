@@ -57,7 +57,7 @@ public static class MinecraftLauncher
             var loadersText = string.Join(",", entry.Loaders.Select(loader => $"{loader.Type} {loader.Version}"));
             Console.WriteLine(
                 $"  [{i + 1,3}] {entry.Name,-50} " +
-                $"MC {entry.MinecraftVersion,-22} {(string.IsNullOrWhiteSpace(loadersText) ? "Vallian" : loadersText),-22} " +
+                $"MC {entry.MinecraftVersion,-22} {(string.IsNullOrWhiteSpace(loadersText) ? "Vanilla" : loadersText),-22} " +
                 $"Java {entry.RequiredJavaVersion?.ToString() ?? "?"}");
         }
 
@@ -82,7 +82,7 @@ public static class MinecraftLauncher
         }
 
         Console.WriteLine("自动选择合适的 Java...");
-        var selectedJava = await selected.SelectAppropriateJavaAsync(javas);
+        var selectedJava = await selected.FindJavaForMinecraftAsync(javas);
         if (selectedJava is null)
         {
             Console.WriteLine("没有可用的 Java 运行时。");

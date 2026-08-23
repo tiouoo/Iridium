@@ -51,6 +51,7 @@ public sealed class PrismMinecraftProvider : IMinecraftProvider {
         var packPath = Path.Combine(dir.FullName, "mmc-pack.json");
         if (!File.Exists(packPath))
             packPath = Path.Combine(dir.FullName, "package.info");
+        
         if (!File.Exists(packPath))
             return null;
 
@@ -68,21 +69,21 @@ public sealed class PrismMinecraftProvider : IMinecraftProvider {
             var uid = component.TryGetProperty("uid", out var uidElement)
                 ? uidElement.GetString()
                 : null;
+            
             if (uid is null)
                 continue;
 
             var version = component.TryGetProperty("version", out var versionElement)
                 ? versionElement.GetString()
                 : null;
+            
             if (version is { Length: > 0 })
                 componentList.Add((uid, version));
 
-            if (uid == "net.minecraft") {
+            if (uid == "net.minecraft")
                 minecraftVersion = version;
-            }
-            else if (ModLoaderDetector.TryMapComponentUid(uid, out var type) && !string.IsNullOrWhiteSpace(version)) {
+            else if (ModLoaderDetector.TryMapComponentUid(uid, out var type) && !string.IsNullOrWhiteSpace(version))
                 loaders.Add(new MinecraftLoader { Type = type, Version = version });
-            }
         }
 
         if (string.IsNullOrWhiteSpace(minecraftVersion))
@@ -104,8 +105,7 @@ public sealed class PrismMinecraftProvider : IMinecraftProvider {
         MinecraftEntry entry,
         IReadOnlyList<(string Uid, string Version)> components,
         DirectoryInfo dir,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken) {
         var docs = new List<(JsonDocument Document, string Uid)>();
         try {
             foreach (var (uid, version) in components) {
@@ -133,18 +133,12 @@ public sealed class PrismMinecraftProvider : IMinecraftProvider {
                     minecraftRoot = root;
 
                 if (root.TryGetProperty("mainClass", out var mainClassElement) &&
-                    mainClassElement.GetString() is { Length: > 0 } value)
-                {
-                    mainClass = value;
-                }
+                    mainClassElement.GetString() is { Length: > 0 } value) mainClass = value;
 
                 // Loader metas carry the full argument set (vanilla prefix included),
                 // so the highest-order component that defines it wins.
                 if (root.TryGetProperty("minecraftArguments", out var minecraftArgumentsElement) &&
-                    minecraftArgumentsElement.GetString() is { Length: > 0 } arguments)
-                {
-                    minecraftArguments = arguments;
-                }
+                    minecraftArgumentsElement.GetString() is { Length: > 0 } arguments) minecraftArguments = arguments;
 
                 if (root.TryGetProperty("libraries", out var librariesElement) && librariesElement.ValueKind == JsonValueKind.Array) {
                     var isLoader = ModLoaderDetector.TryMapComponentUid(uid, out _);
@@ -161,10 +155,9 @@ public sealed class PrismMinecraftProvider : IMinecraftProvider {
                 // Maven files are downloaded into the shared libraries directory but are not
                 // part of the classpath (Forge installer jar, modlauncher runtime files, ...).
                 if (root.TryGetProperty("mavenFiles", out var mavenFilesElement) && mavenFilesElement.ValueKind == JsonValueKind.Array) {
-                    foreach (var mavenFile in VersionJsonParser.MapLibraries(mavenFilesElement)) {
-                        if (seenMavenFiles.Add(mavenFile.Name))
-                            mavenFiles.Add(mavenFile);
-                    }
+                    mavenFiles.AddRange(VersionJsonParser
+                        .MapLibraries(mavenFilesElement)
+                        .Where(mavenFile => seenMavenFiles.Add(mavenFile.Name)));
                 }
             }
 

@@ -1,17 +1,12 @@
 using System.Buffers;
-using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Iridium.Enums;
-using Iridium.Helpers;
 using Iridium.Interfaces.Launch;
 using Iridium.Interfaces.Minecraft;
-using Iridium.Launch;
 using Iridium.Models.Java;
 using Iridium.Models.Launch;
 using Iridium.Models.Minecraft;
 using Iridium.Parsers.Minecraft;
-using Iridium.Providers;
 
 namespace Iridium.Parsers.Launch;
 
@@ -345,10 +340,8 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
             .Where(file => declaredMajor is null || GetMajorVersion(ExtractVersionFromFileName(file, artifact)) == declaredMajor)
             .OrderByDescending(file => ExtractVersionFromFileName(file, artifact), Comparer<string>.Create(CompareVersions))
             .ToArray();
-        if (candidates.Length > 0)
-            return candidates[0];
-
-        return null;
+        
+        return candidates.Length > 0 ? candidates[0] : null;
     }
 
     private static string ExtractVersionFromName(string name) {
@@ -404,7 +397,7 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         return 0;
     }
 
-    private static bool MatchesClassifier(string filePath, string classifier) {
+    private static bool MatchesClassifier(string filePath, string? classifier) {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
         if (string.IsNullOrEmpty(classifier))
             return !HasClassifier(fileName);
@@ -464,7 +457,7 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         return result;
     }
 
-    private static string BuildClasspath(IReadOnlyList<string> libraryPaths, string clientJarPath) {
+    private static string BuildClasspath(List<string> libraryPaths, string clientJarPath) {
         var hasClientJar = !string.IsNullOrEmpty(clientJarPath);
 
         if (libraryPaths.Count == 0 && !hasClientJar)
@@ -584,4 +577,3 @@ internal static class JvmArgumentParser {
         }
     }
 }
-

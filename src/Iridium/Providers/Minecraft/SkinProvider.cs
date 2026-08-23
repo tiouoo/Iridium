@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Flurl;
 using Flurl.Http;
 using Iridium.Models.Authentication;
 

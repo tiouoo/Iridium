@@ -5,7 +5,7 @@ using Flurl.Http;
 using Iridium.Models.Authentication;
 using Iridium.Models.Authentication.Yggdrasil;
 
-namespace Iridium.Services.Authentication;
+namespace Iridium.Authentication;
 
 public sealed class YggdrasilAuthenticator(string url) {
     public async Task<YggdrasilAccount> RefreshAsync(YggdrasilAccount account, CancellationToken cancellationToken = default) {

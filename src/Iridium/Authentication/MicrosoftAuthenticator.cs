@@ -4,7 +4,7 @@ using Flurl.Http;
 using Iridium.Models.Authentication;
 using Iridium.Models.Authentication.Microsoft;
 
-namespace Iridium.Services.Authentication;
+namespace Iridium.Authentication;
 
 public sealed class MicrosoftAuthenticator(string clientId) {
     private readonly IEnumerable<string> _scopes = ["XboxLive.signin", "offline_access", "openid", "profile", "email"];

@@ -3,7 +3,7 @@ using System.Text;
 using Iridium.Models.Authentication;
 using Iridium.Primitives;
 
-namespace Iridium.Services.Authentication;
+namespace Iridium.Authentication;
 
 public sealed class OfflineAuthenticator {
     public OfflineAccount Authenticate(string name, Guid guid = default) {

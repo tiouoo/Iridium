@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace Iridium.Providers.Java;
 
-public static class JavaRuntimeVerifier {
+public static class JavaVerifier {
     private static readonly ConcurrentDictionary<string, bool> ModuleCache = new(StringComparer.OrdinalIgnoreCase);
 
     public static async Task<bool> IsUsableAsync(string javaPath, int majorVersion,

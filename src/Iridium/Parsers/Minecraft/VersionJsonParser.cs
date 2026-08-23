@@ -129,8 +129,8 @@ public static class VersionJsonParser {
     
     public static int? MapJavaVersion(JsonElement root) {
         if (!root.TryGetProperty("javaVersion", out var javaVersion) ||
-            javaVersion.TryGetProperty("majorVersion", out var major) is false ||
-            major.TryGetInt32(out var value) is false)
+            !javaVersion.TryGetProperty("majorVersion", out var major) ||
+            !major.TryGetInt32(out var value))
             return null;
 
         return value;
