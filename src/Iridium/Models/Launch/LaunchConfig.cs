@@ -26,6 +26,18 @@ public sealed record LaunchConfig {
     public ServerInfo? ServerInfo { get; set; }
     
     public IEnumerable<string> JvmArguments { get; set; } = [];
+
+    /// <summary>
+    /// Environment variables injected into the spawned Java process.
+    /// </summary>
+    public IDictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// Optional wrapper command that receives the whole Java invocation as <c>{command}</c>.
+    /// When set, the launcher builds a single command line and runs it through the wrapper
+    /// (e.g. <c>mango {command}</c>), mirroring the legacy MinecraftLaunch behavior.
+    /// </summary>
+    public string? WrapperCommand { get; set; }
 }
 
 public sealed record ServerInfo {

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Channels;
 using Flurl.Http;
+using Iridium.Interfaces.Resources;
 using Iridium.Models.Download;
 using Microsoft.Win32.SafeHandles;
 
@@ -20,13 +21,14 @@ public sealed class DefaultDownloader : IDisposable {
     private readonly CancellationTokenSource _disposeCts;
 
     private readonly bool _isEnableFragment;
+    private readonly IResourceMirror? _mirror;
     
     private readonly int _maxConcurrency;
     private readonly int _maxRetryCount;
     
     private int _disposed;
     
-    public DefaultDownloader(int maxConcurrency = 32, int maxRetryCount = 3, bool isEnableFragment = true) {
+    public DefaultDownloader(int maxConcurrency = 32, int maxRetryCount = 3, bool isEnableFragment = true, IResourceMirror? mirror = null) {
         if (maxConcurrency <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxConcurrency), maxConcurrency, 
                 "Max concurrency must be greater than zero.");
@@ -34,6 +36,7 @@ public sealed class DefaultDownloader : IDisposable {
         _maxConcurrency = maxConcurrency;
         _maxRetryCount = Math.Max(1, maxRetryCount);
         _isEnableFragment =  isEnableFragment;
+        _mirror = mirror;
         
         _globalSemaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
         _disposeCts = new CancellationTokenSource();
@@ -222,12 +225,71 @@ public sealed class DefaultDownloader : IDisposable {
         DownloadRequest request,
         byte[]? singlePartBuffer,
         CancellationToken cancellationToken) {
+        var candidates = await ResolveCandidatesAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (candidates.Count == 1) {
+            await DownloadFileFromSourceAsync(candidates[0], request, singlePartBuffer, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        // Timeout-based failover: on failure/timeout try the next candidate, alternating
+        // back and forth until MaxAttempts is exhausted.
+        Exception? lastException = null;
+        for (var attempt = 0; attempt < SourceSelector.MaxAttempts; attempt++) {
+            var url = candidates[attempt % candidates.Count];
+            try {
+                await DownloadFileFromSourceAsync(url, request, singlePartBuffer, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                throw;
+            } catch (Exception ex) {
+                lastException = ex;
+            }
+        }
+
+        throw lastException ?? new IOException($"All download sources failed for {request.Url}");
+    }
+
+    private async Task<IReadOnlyList<string>> ResolveCandidatesAsync(
+        DownloadRequest request,
+        CancellationToken cancellationToken) {
+        var mirror = _mirror ?? SourceSelector.ResourceMirror;
+        var alternates = new List<string>(request.AlternateUrls ?? []);
+
+        var rewritten = mirror?.TryRewrite(request.Url);
+        if (!string.IsNullOrWhiteSpace(rewritten))
+            alternates.Add(rewritten);
+
+        var unique = alternates
+            .Where(alt => !string.Equals(alt, request.Url, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (unique.Length == 0)
+            return [request.Url];
+
+        // The first alternate is the primary mirror candidate; ordering by mode (including
+        // latency probing in Auto) decides which URL is tried first.
+        var ordered = await SourceSelector.OrderUrlsAsync(request.Url, unique[0], cancellationToken)
+            .ConfigureAwait(false);
+
+        return unique.Length > 1 ? [.. ordered, .. unique.Skip(1)] : ordered;
+    }
+
+    private async Task DownloadFileFromSourceAsync(
+        string url,
+        DownloadRequest request,
+        byte[]? singlePartBuffer,
+        CancellationToken cancellationToken) {
         var directory = Path.GetDirectoryName(request.FileInfo.FullName);
 
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var preparation = await PrepareForDownloadAsync(request.Url, cancellationToken)
+        var preparation = await PrepareForDownloadAsync(url, cancellationToken)
             .ConfigureAwait(false);
 
         var totalBytes = preparation.ContentLength ?? request.Size;

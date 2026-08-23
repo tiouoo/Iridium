@@ -9,7 +9,14 @@ public sealed record DownloadResponse {
 public sealed record DownloadRequest {
     public string Url { get; init; } = string.Empty;
     public string LocalPath { get; init; } = string.Empty;
-    
+
+    /// <summary>
+    /// Additional candidate URLs for the same file (e.g. a mirror). Tried in order with
+    /// timeout-based failover when <see cref="Iridium.Download.SourceSelector"/> is in a
+    /// mirror-aware mode; ignored otherwise.
+    /// </summary>
+    public IReadOnlyList<string>? AlternateUrls { get; init; }
+
     public long Size { get; init; }
     
     public FileInfo FileInfo => new(LocalPath);

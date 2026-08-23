@@ -50,11 +50,7 @@ public sealed class ResourceDownloader : IDisposable {
 
         if (assetIndex is not null) {
             var indexResult = await _downloader.DownloadManyAsync([
-                    new DownloadRequest {
-                        Url = assetIndex.Url,
-                        LocalPath = assetIndex.LocalPath,
-                        Size = assetIndex.Size
-                    }
+                    BuildRequest(assetIndex)
                 ], _forwardProgress, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -118,14 +114,29 @@ public sealed class ResourceDownloader : IDisposable {
         var downloadRequests = new List<DownloadRequest>(files.Count);
 
         foreach (var file in files)
-            downloadRequests.Add(new DownloadRequest {
-                Url = file.Url,
-                LocalPath = file.LocalPath,
-                Size = file.Size
-            });
+            downloadRequests.Add(BuildRequest(file));
 
         return await _downloader.DownloadManyAsync(downloadRequests, _forwardProgress, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static DownloadRequest BuildRequest(DownloadFileEntry file) {
+        var request = new DownloadRequest {
+            Url = file.Url,
+            LocalPath = file.LocalPath,
+            Size = file.Size
+        };
+
+        // Mojang-hosted game files (libraries/assets/client) gain a mirror candidate so
+        // SourceSelector can pick the faster one and fall back on timeout. Third-party
+        // metadata hosts (Forge etc.) and the asset index are left untouched.
+        if (file.Type != DownloadFileType.AssetIndex && IsMojangHosted(file.Url)) {
+            var mirrorUrl = SourceSelector.GameFileMirrorSource.GetUrl(file);
+            if (!string.Equals(file.Url, mirrorUrl, StringComparison.OrdinalIgnoreCase))
+                request = request with { AlternateUrls = [mirrorUrl] };
+        }
+
+        return request;
     }
 
     private List<DownloadFileEntry> ResolveFiles(

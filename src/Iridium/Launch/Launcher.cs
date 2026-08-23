@@ -42,18 +42,58 @@ public sealed class Launcher {
             await entry.ExtractNativesAsync(arguments.Natives, directories.NativesDirectory, cancellationToken: cancellationToken);
 
         List<string> launchArgs = [.. arguments.JvmArguments, arguments.MainClass, .. arguments.GameArguments];
-        var startInfo = new ProcessStartInfo(config.JavaPath.JavaPath) {
-            WorkingDirectory = directories.GameDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        foreach (var argument in launchArgs)
-            startInfo.ArgumentList.Add(argument);
-        
+
+        var javaPath = config.JavaPath.JavaPath;
+        ProcessStartInfo startInfo;
+
+        if (!string.IsNullOrWhiteSpace(config.WrapperCommand)) {
+            // Wrap the whole java invocation in the configured command template
+            // (supports a {command} placeholder), mirroring the legacy behavior.
+            var javaCommand = $"\"{javaPath}\" {string.Join(' ', launchArgs)}";
+            var wrapped = config.WrapperCommand.Contains("{command}", StringComparison.Ordinal)
+                ? config.WrapperCommand.Replace("{command}", javaCommand)
+                : $"{config.WrapperCommand} {javaCommand}";
+
+            var (fileName, wrappedArguments) = SplitCommandLine(wrapped);
+            startInfo = new ProcessStartInfo(fileName) {
+                Arguments = wrappedArguments,
+                WorkingDirectory = directories.GameDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+        } else {
+            startInfo = new ProcessStartInfo(javaPath) {
+                WorkingDirectory = directories.GameDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            foreach (var argument in launchArgs)
+                startInfo.ArgumentList.Add(argument);
+        }
+
+        if (config.EnvironmentVariables is { Count: > 0 } environmentVariables)
+            foreach (var (key, value) in environmentVariables)
+                startInfo.EnvironmentVariables[key] = value;
+
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start Minecraft process: {startInfo.FileName}");
 
         return new MinecraftProcess(process, launchArgs);
+    }
+
+    private static (string FileName, string Arguments) SplitCommandLine(string command) {
+        command = command.Trim();
+        if (command.StartsWith('"')) {
+            var end = command.IndexOf('"', 1);
+            if (end > 0)
+                return (command[1..end], command[(end + 1)..].TrimStart());
+        }
+
+        var space = command.IndexOf(' ');
+        return space < 0
+            ? (command, string.Empty)
+            : (command[..space], command[(space + 1)..].TrimStart());
     }
 }
