@@ -25,7 +25,7 @@ public sealed class Launcher {
         if (config.JavaPath is null)
             throw new InvalidOperationException("JavaPath is required");
 
-        var layout = _factory.Create(entry.Format);
+        var layout = entry.Layout ?? _factory.Create(entry.Format);
         var directories = LaunchDirectories.Resolve(layout, entry, config);
 
         // Deploy the un-hashed ("virtual") asset layout before the argument parser resolves
@@ -44,11 +44,12 @@ public sealed class Launcher {
         List<string> launchArgs = [.. arguments.JvmArguments, arguments.MainClass, .. arguments.GameArguments];
         var startInfo = new ProcessStartInfo(config.JavaPath.JavaPath) {
             WorkingDirectory = directories.GameDirectory,
-            Arguments = string.Join(' ', launchArgs),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        foreach (var argument in launchArgs)
+            startInfo.ArgumentList.Add(argument);
         
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start Minecraft process: {startInfo.FileName}");

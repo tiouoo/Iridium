@@ -25,7 +25,8 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         _factory = factory ?? new DefaultMinecraftLayoutFactory();
     }
 
-    protected virtual IMinecraftLayout CreateLayout(MinecraftEntry entry) => _factory.Create(entry.Format);
+    protected virtual IMinecraftLayout CreateLayout(MinecraftEntry entry) =>
+        entry.Layout ?? _factory.Create(entry.Format);
 
     public LaunchArguments Build(MinecraftEntry entry, LaunchConfig config) {
         if (config.Account is null)
@@ -248,7 +249,7 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
             ["classpath"] = classpath,
             ["primary_jar"] = paths.VersionJarPath,
             ["primary_jar_name"] = Path.GetFileName(paths.VersionJarPath),
-            ["version_name"] = entry.Id,
+            ["version_name"] = entry.VersionId.Length > 0 ? entry.VersionId : entry.MinecraftVersion.Length > 0 ? entry.MinecraftVersion : entry.Id,
             ["natives_directory"] = paths.NativesDirectory
         };
 
@@ -292,15 +293,151 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         LaunchDirectories paths,
         Dictionary<string, bool> features) {
         var result = new List<string>(entry.Libraries.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var library in entry.Libraries) {
-            if (library.Natives is { Count: > 0 } || !VersionArgumentRuleParser.IsActive(library.Rules, features))
+            // Explicit classifier entries (lwjgl-tinyfd:...:natives-windows) stay on the
+            // classpath: LWJGL and Netty extract their natives from there at runtime, and
+            // modern version JSONs point -Djava.library.path at launcher-managed folders
+            // that would otherwise be empty. Only the legacy "natives" dictionary form is
+            // handled by the launcher-side native extraction step.
+            if (library.Natives is { Count: > 0 } ||
+                !VersionArgumentRuleParser.IsActive(library.Rules, features))
                 continue;
 
-            if (MavenPathParser.Resolve(paths.LibrariesRoot, library.Name) is { } path && File.Exists(path))
+            if (ResolveLibraryPath(paths.LibrariesRoot, library.Name) is { } path && seen.Add(path))
                 result.Add(path);
         }
 
         return result;
+    }
+
+    private static bool IsNativeClassifier(string name) {
+        var parts = name.Split(':');
+        return parts.Length >= 4 && parts[3].StartsWith("natives-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves a library's jar path. When the declared artifact file is missing (e.g. a
+    /// launcher shipped a newer build of the same artifact), falls back to an installed jar
+    /// under the artifact's Maven directory that shares the requested classifier, so the
+    /// launch survives metadata drift.
+    /// </summary>
+    private static string? ResolveLibraryPath(string librariesRoot, string name) {
+        if (MavenPathParser.Resolve(librariesRoot, name) is { } declared && File.Exists(declared))
+            return declared;
+
+        var classifier = GetClassifier(name);
+        var artifact = GetArtifact(name);
+        var groupPath = GetArtifactRoot(librariesRoot, name);
+        if (groupPath is null || !Directory.Exists(groupPath))
+            return null;
+
+        var all = Directory.EnumerateFiles(groupPath, "*.jar", SearchOption.AllDirectories)
+            .Where(file => !file.EndsWith("-sources.jar", StringComparison.OrdinalIgnoreCase) &&
+                           !file.EndsWith("-javadoc.jar", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        // Prefer a jar carrying the same classifier, matching on the exact trailing
+        // segment so "-natives-windows" does not match "-natives-windows-x86".
+        // Among variants, choose the highest version rather than newest write time.
+        // Fallbacks are restricted to the same major version: a missing authlib 4.0.43
+        // must not be substituted with the authlib 6.x used by another Minecraft release.
+        var declaredMajor = GetMajorVersion(ExtractVersionFromName(name));
+        var candidates = all
+            .Where(file => MatchesClassifier(file, classifier))
+            .Where(file => declaredMajor is null || GetMajorVersion(ExtractVersionFromFileName(file, artifact)) == declaredMajor)
+            .OrderByDescending(file => ExtractVersionFromFileName(file, artifact), Comparer<string>.Create(CompareVersions))
+            .ToArray();
+        if (candidates.Length > 0)
+            return candidates[0];
+
+        return null;
+    }
+
+    private static string ExtractVersionFromName(string name) {
+        // group:artifact:version[:classifier] -> 3rd segment.
+        var parts = name.Split(':');
+        return parts.Length >= 3 ? parts[2] : string.Empty;
+    }
+
+    private static string GetArtifact(string name) {
+        // group:artifact:version[:classifier] -> 2nd segment.
+        var parts = name.Split(':');
+        return parts.Length >= 2 ? parts[1] : string.Empty;
+    }
+
+    private static int? GetMajorVersion(string version) {
+        var dot = version.IndexOfAny(['.', '-', '_']);
+        var segment = dot >= 0 ? version[..dot] : version;
+        return int.TryParse(segment, out var value) ? value : null;
+    }
+
+    private static string ExtractVersionFromFileName(string filePath, string artifact) {
+        // <artifact>-<version>[-classifier].jar -> strip the artifact prefix to reach
+        // the version segment (artifact names may themselves contain hyphens).
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        if (artifact.Length > 0 && fileName.StartsWith($"{artifact}-", StringComparison.OrdinalIgnoreCase))
+            return fileName[(artifact.Length + 1)..];
+        var index = fileName.IndexOf('-');
+        return index >= 0 ? fileName[(index + 1)..] : fileName;
+    }
+
+    private static int CompareVersions(string a, string b) {
+        var aParts = a.Split(['.', '-', '_'], StringSplitOptions.RemoveEmptyEntries);
+        var bParts = b.Split(['.', '-', '_'], StringSplitOptions.RemoveEmptyEntries);
+        var count = Math.Max(aParts.Length, bParts.Length);
+
+        for (var i = 0; i < count; i++) {
+            var x = i < aParts.Length ? aParts[i] : string.Empty;
+            var y = i < bParts.Length ? bParts[i] : string.Empty;
+            if (x == y)
+                continue;
+
+            if (int.TryParse(x, out var xi) && int.TryParse(y, out var yi)) {
+                var numeric = xi.CompareTo(yi);
+                if (numeric != 0)
+                    return numeric;
+            } else {
+                var ordinal = string.CompareOrdinal(x, y);
+                if (ordinal != 0)
+                    return ordinal;
+            }
+        }
+
+        return 0;
+    }
+
+    private static bool MatchesClassifier(string filePath, string classifier) {
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        if (string.IsNullOrEmpty(classifier))
+            return !HasClassifier(fileName);
+
+        // lwjgl-tinyfd-3.3.3-natives-windows.jar -> check it ends with -<classifier>
+        return fileName.EndsWith($"-{classifier}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetClassifier(string name) {
+        // group:artifact[:version][:classifier] -> 4th segment, if present.
+        var parts = name.Split(':');
+        return parts.Length >= 4 ? parts[3] : string.Empty;
+    }
+
+    private static bool HasClassifier(string fileName) {
+        // e.g. lwjgl-tinyfd-3.3.1-natives-windows.jar -> strip trailing -<ver> and check.
+        var index = fileName.LastIndexOf("-natives-", StringComparison.OrdinalIgnoreCase);
+        return index >= 0;
+    }
+
+    private static string? GetArtifactRoot(string librariesRoot, string name) {
+        var relative = MavenPathParser.GetRelativePath(name);
+        if (relative is null)
+            return null;
+
+        // relative = group/dirs/artifact/version/file.jar -> strip file, keep group/artifact.
+        var directory = Path.GetDirectoryName(Path.Combine(librariesRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
+        if (directory is null)
+            return null;
+        return Path.GetDirectoryName(directory);
     }
 
     private static List<string> ResolveNativePaths(
@@ -309,17 +446,21 @@ public partial class StandardMinecraftArgumentParser : IMinecraftArgumentParser 
         Dictionary<string, bool> features) {
         var result = new List<string>();
         foreach (var library in entry.Libraries) {
-            if (library.Natives is not { Count: > 0 })
-                continue;
-
             if (!VersionArgumentRuleParser.IsActive(library.Rules, features))
                 continue;
 
-            if (VersionArgumentRuleParser.GetNativeClassifier(library.Natives) is not { } classifier)
+            string? classifierName = null;
+            if (library.Natives is { Count: > 0 }) {
+                if (VersionArgumentRuleParser.GetNativeClassifier(library.Natives) is not { } classifier)
+                    continue;
+                classifierName = $"{library.Name}:{classifier}";
+            } else if (IsNativeClassifier(library.Name)) {
+                classifierName = library.Name;
+            } else {
                 continue;
+            }
 
-            var jarPath = MavenPathParser.Resolve(paths.LibrariesRoot, $"{library.Name}:{classifier}");
-            if (jarPath is not null && File.Exists(jarPath))
+            if (ResolveLibraryPath(paths.LibrariesRoot, classifierName) is { } jarPath)
                 result.Add(jarPath);
         }
 
