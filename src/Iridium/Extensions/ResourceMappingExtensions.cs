@@ -1,8 +1,8 @@
-using Iridium.Enums.Resources;
-using Iridium.Helpers.Resources;
-using Iridium.Models.Resources;
-using Iridium.Models.Resources.CurseForge;
-using Iridium.Models.Resources.Modrinth;
+using Iridium.Enums;
+using Iridium.Resources;
+using Iridium.Resources.Models;
+using Iridium.Resources.CurseForge;
+using Iridium.Resources.Modrinth;
 
 namespace Iridium.Extensions;
 

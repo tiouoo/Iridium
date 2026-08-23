@@ -3,11 +3,9 @@ using System.Text;
 using Iridium.Download;
 using Iridium.Extensions;
 using Iridium.Installation;
-using Iridium.Interfaces.Launch;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Launch;
-using Iridium.Models.Minecraft;
-using Iridium.Parsers.Launch;
+using Iridium.Launch;
+using Iridium.Launch.Models;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Launch;
 

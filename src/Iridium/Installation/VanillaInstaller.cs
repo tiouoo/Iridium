@@ -2,12 +2,11 @@ using System.Text.Json;
 using Flurl.Http;
 using Iridium.Download;
 using Iridium.Enums;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Download;
-using Iridium.Models.Installation;
-using Iridium.Models.Minecraft;
-using Iridium.Parsers.Launch;
-using Iridium.Parsers.Minecraft;
+using Iridium.Launch;
+using Iridium.Download.Models;
+using Iridium.Installation.Models;
+using Iridium.Minecraft.Models;
+using Iridium.Minecraft;
 
 namespace Iridium.Installation;
 

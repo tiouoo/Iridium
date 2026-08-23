@@ -1,5 +1,4 @@
 ﻿using Iridium;
-using Iridium.Models;
 
 IridiumConfig.Configure(new IridiumContext());
 Console.OutputEncoding = System.Text.Encoding.UTF8;

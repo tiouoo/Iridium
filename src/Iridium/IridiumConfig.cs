@@ -1,6 +1,6 @@
 using Flurl.Http;
 using Flurl.Http.Configuration;
-using Iridium.Models;
+using Iridium;
 
 namespace Iridium;
 

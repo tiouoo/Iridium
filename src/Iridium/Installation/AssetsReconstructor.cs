@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Iridium.Enums;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Minecraft;
-using Iridium.Parsers.Launch;
+using Iridium.Launch;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Installation;
 

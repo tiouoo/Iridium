@@ -9,11 +9,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Models\Download\" />
-      <Folder Include="Interfaces\Installation\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="Flurl.Http" Version="4.0.2" />
     </ItemGroup>
 

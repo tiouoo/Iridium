@@ -1,10 +1,9 @@
 using Iridium.Extensions;
 using Iridium.Launch;
-using Iridium.Models.Authentication;
-using Iridium.Models.Java;
-using Iridium.Models.Launch;
-using Iridium.Providers.Java;
-using Iridium.Providers.Minecraft;
+using Iridium.Authentication.Models;
+using Iridium.Java;
+using Iridium.Launch.Models;
+using Iridium.Minecraft;
 
 namespace Iridium.Sample;
 

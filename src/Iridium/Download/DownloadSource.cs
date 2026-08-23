@@ -1,4 +1,4 @@
-using Iridium.Models.Download;
+using Iridium.Download.Models;
 
 namespace Iridium.Download;
 

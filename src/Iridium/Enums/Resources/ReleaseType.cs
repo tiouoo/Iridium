@@ -1,4 +1,4 @@
-namespace Iridium.Enums.Resources;
+namespace Iridium.Enums;
 
 [Flags]
 public enum ReleaseType {
