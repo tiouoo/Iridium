@@ -1,37 +1,59 @@
 using System.Text.Json;
-using Iridium.Launch;
+using Iridium.Minecraft;
+using Iridium.Minecraft.Arguments;
+using Iridium.Minecraft.Layout;
 using Iridium.Download.Models;
 using Iridium.Minecraft.Models;
-using Iridium.Minecraft;
 
 namespace Iridium.Download;
 
 public sealed class ResourceDownloader : IDisposable {
     private readonly DownloadSource _source;
-    private readonly IMinecraftLayoutFactory _factory;
     private readonly IMinecraftLayout? _layout;
     private readonly DefaultDownloader _downloader;
     private readonly Action<ResourceDownloadProgressChangedEventArgs> _forwardProgress;
+    private readonly bool _ownsDownloader;
 
     private int _disposed;
-    
+
     public event EventHandler<ResourceDownloadProgressChangedEventArgs>? ProgressChanged;
-    
-    public ResourceDownloader(DownloadSource source, int maxConcurrency = 4, IMinecraftLayoutFactory? factory = null, IMinecraftLayout? layout = null) {
+
+    /// <summary>
+    /// Shared mode: uses the injected <see cref="DefaultDownloader"/> (owned by the install
+    /// executor) so the whole install shares one global concurrency budget. This instance
+    /// does not dispose the downloader.
+    /// </summary>
+    public ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout) {
+        ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(layout);
 
         _source = source;
-        _factory = factory ?? new DefaultMinecraftLayoutFactory();
         _layout = layout;
+        _downloader = downloader;
+        _ownsDownloader = false;
         _forwardProgress = ForwardProgress;
-        _downloader = new DefaultDownloader(maxConcurrency);
+    }
+
+    /// <summary>
+    /// Standalone mode: creates its own downloader and disposes it.
+    /// </summary>
+    public ResourceDownloader(DownloadSource source, IMinecraftLayout layout, int maxConcurrency = 4) {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        _source = source;
+        _layout = layout;
+        _ownsDownloader = true;
+        _forwardProgress = ForwardProgress;
+        _downloader = new DefaultDownloader(Math.Max(1, maxConcurrency));
     }
 
     public async Task<DownloadResponse> DownloadAsync(MinecraftEntry entry, CancellationToken cancellationToken = default) {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(entry);
 
-        var layout = _layout ?? _factory.Create(entry.Format);
+        var layout = _layout ?? throw new InvalidOperationException("A layout is required.");
         var files = ResolveFiles(entry, layout);
 
         DownloadFileEntry? assetIndex = null;
@@ -83,7 +105,7 @@ public sealed class ResourceDownloader : IDisposable {
                     var hash = asset.Value.GetProperty("hash")
                         .GetString()!;
 
-                    var size = asset.Value.TryGetProperty("size", out var sizeElement) 
+                    var size = asset.Value.TryGetProperty("size", out var sizeElement)
                         ? sizeElement.GetInt64()
                         : 0L;
 
@@ -195,11 +217,12 @@ public sealed class ResourceDownloader : IDisposable {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _downloader.Dispose();
+        if (_ownsDownloader)
+            _downloader.Dispose();
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-    
+
     private void ForwardProgress(ResourceDownloadProgressChangedEventArgs args) => ProgressChanged?.Invoke(this, args);
 
     private static IEnumerable<MinecraftLibrary> EnumerateLibraries(MinecraftEntry entry) {

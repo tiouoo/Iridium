@@ -1,7 +1,7 @@
-using Iridium.Extensions;
-using Iridium.Launch;
 using Iridium.Authentication.Models;
+using Iridium.Extensions;
 using Iridium.Java;
+using Iridium.Launch;
 using Iridium.Launch.Models;
 using Iridium.Minecraft;
 
@@ -37,9 +37,9 @@ public static class MinecraftLauncher
             return;
         }
 
-        var (name, path, create) = folders[folderChoice - 1];
-        var provider = create(new DirectoryInfo(path));
-        var instances = await provider.GetMinecraftsAsync();
+        var (name, path) = folders[folderChoice - 1];
+        var provider = MinecraftScanner.Provider;
+        var instances = await provider.GetMinecraftsAsync(new DirectoryInfo(path));
 
         Console.WriteLine();
         Console.WriteLine($"扫描实例 ({name})...");
@@ -52,7 +52,7 @@ public static class MinecraftLauncher
         Console.WriteLine($"找到 {instances.Count} 个实例:");
         for (var i = 0; i < instances.Count; i++)
         {
-            var entry = instances[i];
+            var entry = instances[i].Entry;
             var loadersText = string.Join(",", entry.Loaders.Select(loader => $"{loader.Type} {loader.Version}"));
             Console.WriteLine(
                 $"  [{i + 1,3}] {entry.Name,-50} " +
@@ -69,6 +69,7 @@ public static class MinecraftLauncher
         }
 
         var selected = instances[choice - 1];
+        var selectedEntry = selected.Entry;
 
         Console.WriteLine("解析默认 Java...");
         var javas = new List<JavaEntry>();
@@ -81,7 +82,7 @@ public static class MinecraftLauncher
         }
 
         Console.WriteLine("自动选择合适的 Java...");
-        var selectedJava = await selected.FindJavaForMinecraftAsync(javas);
+        var selectedJava = await selectedEntry.FindJavaForMinecraftAsync(javas);
         if (selectedJava is null)
         {
             Console.WriteLine("没有可用的 Java 运行时。");

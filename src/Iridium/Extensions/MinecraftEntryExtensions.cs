@@ -12,10 +12,8 @@ public static class MinecraftEntryExtensions {
     public static Task ExtractNativesAsync(this MinecraftEntry entry,
         IReadOnlyList<string> nativeJars,
         string? nativesDirectory = null,
-        IMinecraftLayoutFactory? factory = null,
         CancellationToken cancellationToken = default) {
-        var directory = nativesDirectory
-            ?? (factory ?? new DefaultMinecraftLayoutFactory()).Create(entry.Format).GetNativesDirectory(entry);
+        var directory = nativesDirectory ?? entry.InstancePath;
 
         if (nativeJars.Count == 0)
             return Task.CompletedTask;

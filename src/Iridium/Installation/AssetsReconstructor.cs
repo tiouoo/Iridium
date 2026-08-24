@@ -1,6 +1,5 @@
 using System.Text.Json;
-using Iridium.Enums;
-using Iridium.Launch;
+using Iridium.Minecraft.Layout;
 using Iridium.Minecraft.Models;
 
 namespace Iridium.Installation;
@@ -12,13 +11,13 @@ namespace Iridium.Installation;
 /// are additionally copied into the game directory's <c>resources/</c> folder — the only
 /// place those versions read sounds and textures from. Mirrors HMCL reconstructAssets.
 /// </summary>
-internal sealed class AssetsReconstructor {
+public sealed class AssetsReconstructor {
     private const int BufferSize = 64 * 1024;
 
     private readonly IMinecraftLayout _layout;
 
-    public AssetsReconstructor(IMinecraftLayout? layout = null) {
-        _layout = layout ?? new DefaultMinecraftLayoutFactory().Create(MinecraftFormat.Standard);
+    public AssetsReconstructor(IMinecraftLayout layout) {
+        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
     }
 
     /// <summary>
@@ -60,7 +59,7 @@ internal sealed class AssetsReconstructor {
 
         var indexPath = Path.Combine(assetsRoot, "indexes", $"{assetIndexId}.json");
 
-        if (!File.Exists(indexPath)) 
+        if (!File.Exists(indexPath))
             return;
 
         using var document = await ReadIndexAsync(indexPath, cancellationToken)
@@ -71,7 +70,7 @@ internal sealed class AssetsReconstructor {
         if (!root.TryGetProperty("objects", out var objects) || objects.ValueKind != JsonValueKind.Object)
             return;
 
-        var isVirtual = 
+        var isVirtual =
             root.TryGetProperty("virtual", out var virtualFlag) &&
             virtualFlag.ValueKind == JsonValueKind.True;
 
@@ -290,10 +289,10 @@ internal sealed class AssetsReconstructor {
             return false;
         }
 
-        var mapToResources = root.TryGetProperty("map_to_resources", out var mapped) && 
-                             mapped.ValueKind == JsonValueKind.True; 
-        
-        isVirtual = mapToResources || (root.TryGetProperty("virtual", out var virtualFlag) && 
+        var mapToResources = root.TryGetProperty("map_to_resources", out var mapped) &&
+                             mapped.ValueKind == JsonValueKind.True;
+
+        isVirtual = mapToResources || (root.TryGetProperty("virtual", out var virtualFlag) &&
                                        virtualFlag.ValueKind == JsonValueKind.True);
 
         return true;

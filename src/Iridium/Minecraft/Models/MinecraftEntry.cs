@@ -1,5 +1,4 @@
 using Iridium.Enums;
-using Iridium.Launch;
 
 namespace Iridium.Minecraft.Models;
 
@@ -15,16 +14,6 @@ public sealed record MinecraftEntry {
     /// inheritance chain. Null when the manifest carries no explicit requirement.
     /// </summary>
     public int? RequiredJavaVersion { get; init; }
-
-    public MinecraftFormat Format { get; init; }
-
-    /// <summary>
-    /// Optional custom directory mapping for this entry. When set, the launcher uses it
-    /// instead of the default layout for the entry's <see cref="Format"/>, letting a
-    /// provider describe exotic folder layouts (e.g. a shared <c>meta/</c> store) without
-    /// registering a factory.
-    /// </summary>
-    public IMinecraftLayout? Layout { get; init; }
 
     public AssetIndex? AssetIndex { get; init; }
     public string? AssetIndexUrl { get; init; }

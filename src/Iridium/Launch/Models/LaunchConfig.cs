@@ -1,8 +1,7 @@
-using Iridium.Download;
-using Iridium.Installation;
-using Iridium.Launch;
 using Iridium.Authentication.Models;
 using Iridium.Java;
+using Iridium.Installation;
+using Iridium.Minecraft.Layout;
 using Iridium.Minecraft.Models;
 
 namespace Iridium.Launch.Models;
