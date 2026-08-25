@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Iridium.Minecraft;
-using Iridium.Minecraft.Layout;
 using Iridium.Models.Download;
 using Iridium.Models.Minecraft;
 using Iridium.Interfaces;
@@ -21,15 +20,6 @@ public sealed class ResourceDownloader : IDisposable {
 
     public event EventHandler<ResourceDownloadProgressChangedEventArgs>? ProgressChanged;
 
-    /// <summary>
-    /// Shared mode: uses the injected <see cref="DefaultDownloader"/> (normally
-    /// <see cref="DefaultDownloader.Default"/>). This instance does not dispose the downloader.
-    /// </summary>
-    public ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout)
-        : this(downloader, source, layout, null) {
-    }
-
-    /// <summary>Shared mode with an explicit per-step download concurrency limit.</summary>
     internal ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout, int? maxConcurrency) {
         ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(source);
@@ -43,18 +33,19 @@ public sealed class ResourceDownloader : IDisposable {
         _forwardProgress = ForwardProgress;
     }
 
-    /// <summary>
-    /// Standalone mode: creates its own downloader and disposes it.
-    /// </summary>
     public ResourceDownloader(DownloadSource source, IMinecraftLayout layout, int maxConcurrency = 4) {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(layout);
-
-        _source = source;
-        _layout = layout;
-        _ownsDownloader = true;
-        _forwardProgress = ForwardProgress;
-        _downloader = new DefaultDownloader(Math.Max(1, maxConcurrency));
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(layout);
+    
+            _source = source;
+            _layout = layout;
+            _ownsDownloader = true;
+            _forwardProgress = ForwardProgress;
+            _downloader = new DefaultDownloader(Math.Max(1, maxConcurrency));
+        }
+    
+    public ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout)
+        : this(downloader, source, layout, null) {
     }
 
     public async Task<DownloadResponse> DownloadAsync(MinecraftEntry entry, CancellationToken cancellationToken = default) {
@@ -146,22 +137,19 @@ public sealed class ResourceDownloader : IDisposable {
             };
 
         var downloadRequests = new List<DownloadRequest>(files.Count);
-
-        foreach (var file in files)
-            downloadRequests.Add(new DownloadRequest {
+        downloadRequests.AddRange(files
+            .Select(file => new DownloadRequest {
                 Url = file.Url,
                 LocalPath = file.LocalPath,
                 Size = file.Size,
                 Sha1 = file.Sha1
-            });
+            }));
 
         return await _downloader.DownloadManyAsync(downloadRequests, _maxConcurrency, _forwardProgress, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private List<DownloadFileEntry> ResolveFiles(
-        MinecraftEntry entry,
-        IMinecraftLayout layout) {
+    private List<DownloadFileEntry> ResolveFiles(MinecraftEntry entry, IMinecraftLayout layout) {
         var files = new List<DownloadFileEntry>(entry.Libraries.Count + 64);
         var librariesRoot = layout.GetLibrariesRoot(entry);
         var assetsRoot = layout.GetAssetsRoot(entry);
@@ -242,13 +230,7 @@ public sealed class ResourceDownloader : IDisposable {
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-
-    /// <summary>
-    /// Whether the file at <paramref name="localPath"/> needs (re-)downloading. A missing
-    /// file, a size mismatch (when a positive size is known) or a SHA-1 mismatch (when a hash
-    /// is known) all require a fresh download — this is what heals installs interrupted
-    /// mid-write that would otherwise leave a corrupt client jar behind.
-    /// </summary>
+    
     private static bool NeedsDownload(string localPath, long size, string? sha1) {
         if (!File.Exists(localPath))
             return true;

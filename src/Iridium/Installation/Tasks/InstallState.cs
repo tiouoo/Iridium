@@ -7,6 +7,8 @@ namespace Iridium.Installation.Tasks;
 /// Steps that need no shared state simply ignore it.
 /// </summary>
 public sealed class InstallState {
+    public const string DownloadConcurrencyKey = "install.download-concurrency";
+
     private readonly Dictionary<string, object?> _store = new(StringComparer.Ordinal);
 
     public void Set(string key, object? value) => _store[key] = value;

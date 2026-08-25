@@ -81,12 +81,14 @@ public sealed class InstallTask {
     /// Executes this task. Aggregated <see cref="InstallProgress"/> snapshots are published
     /// synchronously through <paramref name="reportProgress"/> (in the current execution
     /// thread, never marshalled to a UI thread); the completed <see cref="InstallResult"/>
-    /// carries the shared <see cref="InstallState"/> the steps populated.
+    /// carries the shared <see cref="InstallState"/> the steps populated. A caller may pass a
+    /// pre-seeded <paramref name="state"/> to inject settings before execution.
     /// </summary>
     public async System.Threading.Tasks.Task<InstallResult> InstallAsync(
         Action<InstallProgress>? reportProgress = null,
+        InstallState? state = null,
         CancellationToken ct = default) {
-        var state = new InstallState();
+        state ??= new InstallState();
         return await InstallTaskExecutor.ExecuteAsync(this, state, reportProgress, ct).ConfigureAwait(false);
     }
 
@@ -162,8 +164,7 @@ public sealed class InstallTask {
     /// Fans out several steps with explicit keys, each running after the current frontier. A
     /// subsequent <see cref="Then(IInstallStep)"/> waits on all of them (join point).
     /// </summary>
-    public InstallTask Parallel(
-        params (InstallStepKey Key, string Name, InstallStepHandler Handler)[] steps) =>
+    public InstallTask Parallel(params (InstallStepKey Key, string Name, InstallStepHandler Handler)[] steps) =>
         Parallel([.. steps.Select(static step => (IInstallStep)new InstallStep(step.Key, step.Name, step.Handler))]);
 
     /// <summary>Fans out several class-based steps; see the tuple overload.</summary>
