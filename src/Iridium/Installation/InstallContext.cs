@@ -1,22 +1,25 @@
 using Iridium.Download;
+using Iridium.Interfaces;
 using Iridium.Minecraft;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Installation;
 
 /// <summary>
-/// Shared state for one install execution. Carries the target Minecraft context, the
-/// download source and the shared <see cref="DefaultDownloader"/> so every download
-/// operation shares a single global concurrency budget.
+/// Shared state for one install execution: the install target, the download source and the
+/// data bag steps exchange intermediate results through. Execution infrastructure (step
+/// scheduler, per-step download concurrency) is owned by the <see cref="InstallTaskExecutor"/>
+/// for the duration of the execution and is not part of this context's public surface.
 /// </summary>
 public sealed class InstallContext {
-    public required MinecraftContext Minecraft { get; init; }
+    public required MinecraftTarget Target { get; init; }
     public required DownloadSource Source { get; init; }
 
-    /// <summary>Shared downloader owned by the executor; all operations must reuse it.</summary>
-    public DefaultDownloader? Downloader { get; internal set; }
+    /// <summary>Shared default downloader; steps obtain downloads via <see cref="CreateResourceDownloader"/>.</summary>
+    internal DefaultDownloader Downloader { get; set; } = DefaultDownloader.Default;
 
-    internal string CurrentOperationKey { get; set; } = string.Empty;
-    internal Action<string, double>? ProgressReporter { get; set; }
+    /// <summary>Per-step download concurrency for this execution, set by the executor.</summary>
+    internal int DownloadConcurrency { get; set; } = 32;
 
     private readonly Dictionary<string, object?> _state = new(StringComparer.Ordinal);
 
@@ -26,24 +29,17 @@ public sealed class InstallContext {
         _state.TryGetValue(key, out var value) && value is T typed ? typed : default;
 
     /// <summary>
-    /// Reports sub-progress (0..1) of the currently executing operation, e.g. downloaded
-    /// items over total items.
+    /// Creates a <see cref="ResourceDownloader"/> bound to the shared default downloader and
+    /// this execution's per-step download concurrency, so every download step applies the same
+    /// uniform concurrency limit.
     /// </summary>
-    public void ReportProgress(double operationProgress = 0d)
-        => ProgressReporter?.Invoke(CurrentOperationKey, operationProgress);
-}
-
-/// <summary>Progress snapshot aggregated by the <see cref="InstallTaskExecutor"/>.</summary>
-public sealed record InstallProgress {
-    public required string CurrentOperation { get; init; }
-    public double TotalProgress { get; init; }
-    public int CompletedOperations { get; init; }
-    public int TotalOperations { get; init; }
+    internal ResourceDownloader CreateResourceDownloader(IMinecraftLayout layout) =>
+        new(Downloader, Source, layout, DownloadConcurrency);
 }
 
 /// <summary>Result of executing an <see cref="InstallTask"/>.</summary>
 public sealed record InstallResult {
-    public required MinecraftContext Minecraft { get; init; }
+    public required MinecraftTarget Target { get; init; }
     public IReadOnlyList<Exception> Failures { get; init; } = [];
     public TimeSpan Elapsed { get; init; }
     public bool IsSuccess => Failures.Count == 0;

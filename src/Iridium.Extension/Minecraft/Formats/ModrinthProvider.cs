@@ -1,9 +1,8 @@
-using IFormatProvider = Iridium.Minecraft.Formats.IFormatProvider;
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 using Iridium.Extension.Minecraft.Layout;
 using Iridium.Extension.Minecraft.Parsing;
 using Iridium.Minecraft;
-using Iridium.Installation;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 using Microsoft.Data.Sqlite;
 
 namespace Iridium.Extension.Minecraft.Formats;
@@ -22,10 +21,11 @@ public sealed class ModrinthProvider : IFormatProvider {
     public bool CanResolve(DirectoryInfo root) =>
         File.Exists(Path.Combine(root.FullName, "app.db"));
 
-    public ValueTask<MinecraftContext?> TryResolveAsync(DirectoryInfo root, CancellationToken ct = default) {
+    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, string instanceId, CancellationToken ct = default) {
         // Modrinth profiles are enumerated through the launcher database; a single profile
-        // directory carries no metadata of its own. Resolve via enumeration for now.
-        return ValueTask.FromResult<MinecraftContext?>(null);
+        // directory carries no metadata of its own, so resolve via enumeration + filter.
+        var instances = await GetMinecraftsAsync(root, ct);
+        return instances.FirstOrDefault(c => string.Equals(c.Entry.Id, instanceId, StringComparison.Ordinal));
     }
 
     public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
@@ -75,17 +75,10 @@ public sealed class ModrinthProvider : IFormatProvider {
         return contexts;
     }
 
-    public void ConfigureInstallation(InstallTaskBuilder builder, MinecraftContext context) {
-    }
-
-    public void ConfigureArguments(Iridium.Minecraft.Arguments.ArgumentBuilder builder, MinecraftContext context) {
-    }
-
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
         Format = "Modrinth",
         Layout = new ModrinthLayout(),
         Entry = entry,
-        Provider = new ModrinthProvider()
     };
 
     private async Task<MinecraftEntry?> ParseAsync(

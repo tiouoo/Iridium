@@ -1,4 +1,4 @@
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extension.Minecraft.Layout;
 
@@ -10,6 +10,8 @@ namespace Iridium.Extension.Minecraft.Layout;
 /// local <c>natives</c> folder.
 /// </summary>
 public sealed class CurseForgeLayout : SharedMetadataLayout {
+    public override string Format => "CurseForge";
+
     protected override string InstanceFolder => "Instances";
 
     protected override string MetadataFolder => "Install";

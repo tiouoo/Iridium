@@ -1,5 +1,5 @@
 using Iridium.Extensions;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using Iridium.Resources.CurseForge;
 using CurseForgeJsonContext = Iridium.Resources.CurseForge.CurseForgeJsonContext;
 

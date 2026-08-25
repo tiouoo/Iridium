@@ -1,6 +1,6 @@
 using Iridium.Enums;
 using Iridium.Extensions;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using CurseForgeJsonContext = Iridium.Resources.CurseForge.CurseForgeJsonContext;
 
 namespace Iridium.Resources.CurseForge;

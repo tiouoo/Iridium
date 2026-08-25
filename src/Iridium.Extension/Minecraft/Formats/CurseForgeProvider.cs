@@ -1,11 +1,10 @@
 using System.Text.Json;
 using Iridium.Enums;
-using IFormatProvider = Iridium.Minecraft.Formats.IFormatProvider;
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 using Iridium.Extension.Minecraft.Layout;
 using Iridium.Extension.Minecraft.Parsing;
 using Iridium.Minecraft;
-using Iridium.Installation;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extension.Minecraft.Formats;
 
@@ -24,13 +23,13 @@ public sealed class CurseForgeProvider : IFormatProvider {
         Directory.Exists(Path.Combine(root.FullName, "Instances")) &&
         Directory.Exists(Path.Combine(root.FullName, "Install"));
 
-    public async ValueTask<MinecraftContext?> TryResolveAsync(DirectoryInfo root, CancellationToken ct = default) {
-        if (!File.Exists(Path.Combine(root.FullName, "minecraftinstance.json")))
+    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, string instanceId, CancellationToken ct = default) {
+        var instanceDir = Path.Combine(root.FullName, "Instances", instanceId);
+        if (!Directory.Exists(instanceDir))
             return null;
 
-        var launcherRoot = Path.GetDirectoryName(Path.GetDirectoryName(root.FullName)) ?? root.FullName;
-        var entry = await ParseAsync(root.FullName, launcherRoot, ct);
-        return entry is null ? null : Wrap(root, entry);
+        var entry = await ParseAsync(instanceDir, root.FullName, ct);
+        return entry is null ? null : Wrap(new DirectoryInfo(instanceDir), entry);
     }
 
     public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
@@ -48,17 +47,10 @@ public sealed class CurseForgeProvider : IFormatProvider {
         return contexts;
     }
 
-    public void ConfigureInstallation(InstallTaskBuilder builder, MinecraftContext context) {
-    }
-
-    public void ConfigureArguments(Iridium.Minecraft.Arguments.ArgumentBuilder builder, MinecraftContext context) {
-    }
-
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
         Format = "CurseForge",
         Layout = new CurseForgeLayout(),
         Entry = entry,
-        Provider = new CurseForgeProvider()
     };
 
     private async Task<MinecraftEntry?> ParseAsync(string instanceDir, string launcherRoot, CancellationToken ct) {

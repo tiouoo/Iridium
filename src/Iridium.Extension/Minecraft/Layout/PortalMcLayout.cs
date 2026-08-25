@@ -1,4 +1,4 @@
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extension.Minecraft.Layout;
 
@@ -10,6 +10,8 @@ namespace Iridium.Extension.Minecraft.Layout;
 /// with game files directly inside the instance directory.
 /// </summary>
 public sealed class PortalMcLayout : SharedMetadataLayout {
+    public override string Format => "PortalMc";
+
     protected override string InstanceFolder => "instances";
 
     protected override string MetadataFolder => "meta";

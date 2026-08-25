@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Iridium.Minecraft.Layout;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
+using Iridium.Interfaces;
 
 namespace Iridium.Installation;
 

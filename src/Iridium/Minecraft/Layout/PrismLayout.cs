@@ -1,9 +1,12 @@
 using Iridium.Minecraft;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
+using Iridium.Interfaces;
 
 namespace Iridium.Minecraft.Layout;
 
 public sealed class PrismLayout : IMinecraftLayout {
+    public string Format => "Prism";
+
     public string GetInstanceDirectory(string id) => Path.Combine("instances", id);
 
     public string GetInstanceRoot(MinecraftEntry entry) => entry.InstancePath;

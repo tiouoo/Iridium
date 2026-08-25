@@ -1,6 +1,6 @@
 using Iridium.Extensions;
 using Iridium.Utilities;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using ModrinthSearchResultContext = Iridium.Resources.Modrinth.ModrinthSearchResultContext;
 
 namespace Iridium.Resources.Modrinth;

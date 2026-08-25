@@ -1,10 +1,9 @@
 using System.Text.Json;
-using IFormatProvider = Iridium.Minecraft.Formats.IFormatProvider;
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 using Iridium.Extension.Minecraft.Layout;
 using Iridium.Extension.Minecraft.Parsing;
 using Iridium.Minecraft;
-using Iridium.Installation;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extension.Minecraft.Formats;
 
@@ -45,14 +44,13 @@ public sealed class PortalMcProvider : IFormatProvider {
         return false;
     }
 
-    public async ValueTask<MinecraftContext?> TryResolveAsync(DirectoryInfo root, CancellationToken ct = default) {
-        var jsonPath = Path.Combine(root.FullName, $"{root.Name}.json");
-        if (!File.Exists(jsonPath))
+    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, string instanceId, CancellationToken ct = default) {
+        var instanceDir = Path.Combine(root.FullName, "instances", instanceId);
+        if (!Directory.Exists(instanceDir))
             return null;
 
-        var launcherRoot = Path.GetDirectoryName(Path.GetDirectoryName(root.FullName)) ?? root.FullName;
-        var entry = await ParseAsync(root.FullName, launcherRoot, ct);
-        return entry is null ? null : Wrap(root, entry);
+        var entry = await ParseAsync(instanceDir, root.FullName, ct);
+        return entry is null ? null : Wrap(new DirectoryInfo(instanceDir), entry);
     }
 
     public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
@@ -70,17 +68,10 @@ public sealed class PortalMcProvider : IFormatProvider {
         return contexts;
     }
 
-    public void ConfigureInstallation(InstallTaskBuilder builder, MinecraftContext context) {
-    }
-
-    public void ConfigureArguments(Iridium.Minecraft.Arguments.ArgumentBuilder builder, MinecraftContext context) {
-    }
-
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
         Format = "PortalMc",
         Layout = new PortalMcLayout(),
         Entry = entry,
-        Provider = new PortalMcProvider()
     };
 
     private async Task<MinecraftEntry?> ParseAsync(string instanceDir, string launcherRoot, CancellationToken ct) {

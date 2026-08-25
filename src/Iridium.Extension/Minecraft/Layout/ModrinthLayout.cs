@@ -1,4 +1,4 @@
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extension.Minecraft.Layout;
 
@@ -10,6 +10,8 @@ namespace Iridium.Extension.Minecraft.Layout;
 /// <c>profiles/&lt;name&gt;</c>.
 /// </summary>
 public sealed class ModrinthLayout : SharedMetadataLayout {
+    public override string Format => "Modrinth";
+
     protected override string InstanceFolder => "profiles";
 
     protected override string MetadataFolder => "meta";

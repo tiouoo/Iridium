@@ -1,5 +1,5 @@
 using Iridium.Enums;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 
 namespace Iridium.Resources;
 

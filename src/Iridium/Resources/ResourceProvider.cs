@@ -1,6 +1,6 @@
 using Iridium.Download;
 using Iridium.Enums;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using Iridium.Resources.CurseForge;
 using Iridium.Resources.Modrinth;
 

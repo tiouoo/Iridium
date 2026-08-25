@@ -1,11 +1,10 @@
 using System.Text.Json;
-using IFormatProvider = Iridium.Minecraft.Formats.IFormatProvider;
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 using Iridium.Enums;
-using Iridium.Installation;
 using Iridium.Minecraft.Layout;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
-namespace Iridium.Minecraft;
+namespace Iridium.Minecraft.Formats;
 
 /// <summary>
 /// Scans the traditional launcher layout where every version lives under a
@@ -19,14 +18,13 @@ public sealed class StandardMinecraftProvider : IFormatProvider {
     public bool CanResolve(DirectoryInfo root) =>
         Directory.Exists(Path.Combine(root.FullName, "versions"));
 
-    public async ValueTask<MinecraftContext?> TryResolveAsync(DirectoryInfo root, CancellationToken ct = default) {
-        // The root is itself a version directory (versions/<id>).
-        if (!File.Exists(Path.Combine(root.FullName, $"{root.Name}.json")))
+    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, string instanceId, CancellationToken ct = default) {
+        var dir = new DirectoryInfo(Path.Combine(root.FullName, "versions", instanceId));
+        if (!dir.Exists)
             return null;
 
-        var launcherRoot = Path.GetDirectoryName(Path.GetDirectoryName(root.FullName)) ?? root.FullName;
-        var entry = await ParseAsync(root, launcherRoot, ct);
-        return entry is null ? null : Wrap(root, entry);
+        var entry = await ParseAsync(dir, root.FullName, ct);
+        return entry is null ? null : Wrap(dir, entry);
     }
 
     public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
@@ -44,17 +42,10 @@ public sealed class StandardMinecraftProvider : IFormatProvider {
         return contexts;
     }
 
-    public void ConfigureInstallation(InstallTaskBuilder builder, MinecraftContext context) {
-    }
-
-    public void ConfigureArguments(Arguments.ArgumentBuilder builder, MinecraftContext context) {
-    }
-
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
         Format = "Standard",
         Layout = new StandardLayout(),
         Entry = entry,
-        Provider = new StandardMinecraftProvider()
     };
 
     private async Task<MinecraftEntry?> ParseAsync(DirectoryInfo dir, string launcherRoot, CancellationToken ct) {

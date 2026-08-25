@@ -1,43 +1,40 @@
+using Iridium.Interfaces;
 using Iridium.Minecraft.Formats;
-using IFormatProvider = Iridium.Minecraft.Formats.IFormatProvider;
+
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 
 namespace Iridium.Minecraft;
 
-/// <summary>
-/// Resolves a Minecraft directory by trying each registered format provider. Providers
-/// are consulted in descending <see cref="IFormatProvider.Priority"/> order.
-/// </summary>
 public sealed class MinecraftProvider : IMinecraftProvider {
-    private readonly IReadOnlyList<IFormatProvider> _providers;
-
     public static readonly IReadOnlyList<IFormatProvider> Default = [
         new StandardMinecraftProvider(),
         new PrismMinecraftProvider()
     ];
-    
-    public MinecraftProvider(IEnumerable<IFormatProvider>? providers = null) {
-        var p = providers ?? Default;
-        _providers = [.. p.OrderByDescending(provider => provider.Priority)];
+
+    private readonly IReadOnlyList<IFormatProvider> _providers;
+
+    public MinecraftProvider(DirectoryInfo root, IEnumerable<IFormatProvider>? providers = null) {
+        Root = root ?? throw new ArgumentNullException(nameof(root));
+        _providers = [.. (providers ?? Default).OrderByDescending(p => p.Priority)];
     }
 
-    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, CancellationToken ct = default) {
-        ArgumentNullException.ThrowIfNull(root);
+    /// <summary>Game Root：本 Provider 绑定的游戏/Launcher 根目录。</summary>
+    public DirectoryInfo Root { get; }
+
+    public async ValueTask<MinecraftContext?> GetAsync(string instanceId, CancellationToken ct = default) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
         foreach (var provider in _providers)
-            if (await provider.TryResolveAsync(root, ct) is { } context)
+            if (await provider.GetAsync(Root, instanceId, ct) is { } context)
                 return context;
-        
         return null;
     }
 
-    public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
-        ArgumentNullException.ThrowIfNull(root);
+    public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(CancellationToken ct = default) {
         foreach (var provider in _providers) {
-            if (!provider.CanResolve(root))
+            if (!provider.CanResolve(Root))
                 continue;
-        
-            return await provider.GetMinecraftsAsync(root, ct);
+            return await provider.GetMinecraftsAsync(Root, ct);
         }
-        
         return [];
     }
 }

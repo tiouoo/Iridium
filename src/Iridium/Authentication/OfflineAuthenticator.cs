@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Iridium.Authentication.Models;
+using Iridium.Models.Authentication;
 using Iridium.Primitives;
 
 namespace Iridium.Authentication;

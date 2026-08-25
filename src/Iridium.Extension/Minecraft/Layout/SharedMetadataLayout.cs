@@ -1,5 +1,6 @@
 using Iridium.Minecraft.Layout;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
+using Iridium.Interfaces;
 
 namespace Iridium.Extension.Minecraft.Layout;
 
@@ -10,6 +11,9 @@ namespace Iridium.Extension.Minecraft.Layout;
 /// or <c>instances/&lt;name&gt;</c> + <c>meta/</c> (Portal MC, Modrinth).
 /// </summary>
 public abstract class SharedMetadataLayout : IMinecraftLayout {
+    /// <summary>Format identity of this layout (e.g. "CurseForge", "Modrinth", "PortalMc").</summary>
+    public abstract string Format { get; }
+
     /// <summary>Name of the folder holding per-instance game directories (e.g. "instances").</summary>
     protected abstract string InstanceFolder { get; }
 

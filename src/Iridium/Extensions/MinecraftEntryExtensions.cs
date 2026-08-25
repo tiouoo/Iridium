@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using Iridium.Launch;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Extensions;
 

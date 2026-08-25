@@ -1,9 +1,12 @@
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
 using Iridium.Utilities;
+using Iridium.Interfaces;
 
 namespace Iridium.Minecraft.Layout;
 
 public sealed class StandardLayout : IMinecraftLayout {
+    public string Format => "Standard";
+
     public string GetInstanceDirectory(string id) => Path.Combine("versions", id);
 
     public string GetInstanceRoot(MinecraftEntry entry) => GetRoot(entry);

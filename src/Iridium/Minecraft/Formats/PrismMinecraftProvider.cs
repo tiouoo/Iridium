@@ -1,10 +1,11 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using Iridium.Minecraft.Arguments;
-using Iridium.Installation;
+using Iridium.Minecraft;
+using Iridium.Minecraft.Formats;
 using Iridium.Minecraft.Layout;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
+using IFormatProvider = Iridium.Interfaces.IFormatProvider;
 
 namespace Iridium.Minecraft.Formats;
 
@@ -30,14 +31,13 @@ public sealed class PrismMinecraftProvider : IFormatProvider {
                         File.Exists(Path.Combine(dir, "package.info")));
     }
 
-    public async ValueTask<MinecraftContext?> TryResolveAsync(DirectoryInfo root, CancellationToken ct = default) {
-        if (!File.Exists(Path.Combine(root.FullName, "mmc-pack.json")) &&
-            !File.Exists(Path.Combine(root.FullName, "package.info")))
+    public async ValueTask<MinecraftContext?> GetAsync(DirectoryInfo root, string instanceId, CancellationToken ct = default) {
+        var dir = new DirectoryInfo(Path.Combine(root.FullName, "instances", instanceId));
+        if (!dir.Exists)
             return null;
 
-        var launcherRoot = Path.GetDirectoryName(Path.GetDirectoryName(root.FullName)) ?? root.FullName;
-        var entry = await ParseAsync(root, launcherRoot, ct);
-        return entry is null ? null : Wrap(root, entry);
+        var entry = await ParseAsync(dir, root.FullName, ct);
+        return entry is null ? null : Wrap(dir, entry);
     }
 
     public async ValueTask<IReadOnlyList<MinecraftContext>> GetMinecraftsAsync(DirectoryInfo root, CancellationToken ct = default) {
@@ -55,17 +55,10 @@ public sealed class PrismMinecraftProvider : IFormatProvider {
         return contexts;
     }
 
-    public void ConfigureInstallation(InstallTaskBuilder builder, MinecraftContext context) {
-    }
-
-    public void ConfigureArguments(ArgumentBuilder builder, MinecraftContext context) {
-    }
-
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
         Format = "Prism",
         Layout = new PrismLayout(),
         Entry = entry,
-        Provider = new PrismMinecraftProvider()
     };
 
     private async Task<MinecraftEntry?> ParseAsync(DirectoryInfo dir, string launcherRoot, CancellationToken ct) {

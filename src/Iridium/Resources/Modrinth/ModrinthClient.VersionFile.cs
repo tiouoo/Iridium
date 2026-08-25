@@ -1,7 +1,7 @@
 using Iridium.Enums;
 using Iridium.Extensions;
 using Iridium.Utilities;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using Iridium.Resources.Modrinth;
 
 using ModrinthRequestContext = Iridium.Resources.Modrinth.ModrinthRequestContext;
