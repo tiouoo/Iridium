@@ -8,44 +8,57 @@ using Iridium.Installation.Tasks;
 
 namespace Iridium.Installation.Installer;
 
+/// <summary>
+/// A concrete Minecraft installer: owns the Minecraft-specific inputs (target, download
+/// source, version) and expresses its flow as a plain <see cref="InstallTask"/> — the generic
+/// core itself knows nothing about Minecraft.
+/// </summary>
 public sealed class VanillaInstaller : InstallerBase {
     private const string VersionManifestUrl = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
-    
+
     private readonly MinecraftTarget _target;
     private readonly DownloadSource _source;
-    
+    private readonly VersionManifestEntry _version;
+
     public static readonly InstallStepKey DownloadVersion = nameof(DownloadVersion);
     public static readonly InstallStepKey ResolveVersion = nameof(ResolveVersion);
     public static readonly InstallStepKey DownloadResources = nameof(DownloadResources);
     public static readonly InstallStepKey ReconstructAssets = nameof(ReconstructAssets);
-    
-    public VanillaInstaller(MinecraftTarget target, DownloadSource? source = null) {
+
+    public VanillaInstaller(
+        MinecraftTarget target,
+        VersionManifestEntry version,
+        DownloadSource? source = null) {
         _target = target ?? throw new ArgumentNullException(nameof(target));
+        _version = version ?? throw new ArgumentNullException(nameof(version));
         _source = source ?? DownloadSource.Official;
     }
-    
-    public static InstallTask CreateTask(VersionManifestEntry version) {
-        ArgumentNullException.ThrowIfNull(version);
 
-        return InstallTask.Define(task => task
-            .Do(DownloadVersion, "Download Version", (context, progress, ct) => DownloadVersionAsync(version, context, progress, ct))
-            .Then(ResolveVersion, "Resolve Version", ResolveVersionAsync)
-            .Then(DownloadResources, "Download Resources", DownloadResourcesAsync)
-            .Then(ReconstructAssets, "Reconstruct Assets", ReconstructAssetsAsync));
-    }
-    
-    public async Task<MinecraftInstallResult> InstallAsync(
-        VersionManifestEntry version,
-        IProgress<InstallProgress>? progress = null,
-        Action<InstallTask>? configure = null,
-        int maxConcurrency = 32,
+    /// <summary>The vanilla installation flow: download manifest → resolve → download resources → deploy assets.</summary>
+    protected override InstallTask CreateTask() =>
+        InstallTask.Define(task => task
+            .Do(DownloadVersion, "Download Version", (state, report, ct) => DownloadVersionAsync(_version, _target, state, report, ct))
+            .Then(ResolveVersion, "Resolve Version", (state, report, ct) => ResolveVersionAsync(_target, state, report, ct))
+            .Then(DownloadResources, "Download Resources", (state, report, ct) => DownloadResourcesAsync(_source, state, report, ct))
+            .Then(ReconstructAssets, "Reconstruct Assets", (state, report, ct) => ReconstructAssetsAsync(state, report, ct)));
+
+    /// <summary>Runs the vanilla install and returns the Minecraft-specific result.</summary>
+    public new async Task<MinecraftInstallResult> InstallAsync(
+        Action<InstallProgress>? reportProgress = null,
         CancellationToken ct = default) {
-        ArgumentNullException.ThrowIfNull(version);
+        var result = await RunTaskAsync(CreateTask(), reportProgress, ct).ConfigureAwait(false);
 
-        var task = CreateTask(version);
-        configure?.Invoke(task);
+        var resolved = result.State.Get<MinecraftContext>("resolved-context");
+        var entry = resolved?.Entry
+            ?? result.State.Get<MinecraftEntry>("seed-entry")
+            ?? new MinecraftEntry { InstancePath = _target.Root.FullName };
 
-        return await ExecuteAsync(task, progress, maxConcurrency, ct);
+        return new MinecraftInstallResult {
+            Target = _target,
+            Minecraft = resolved,
+            VersionJsonPath = result.State.Get<string>("version-json-path") ?? string.Empty,
+            ClientJarPath = _target.Layout.GetVersionJarPath(entry)
+        };
     }
 
     public static async Task<IReadOnlyList<VersionManifestEntry>?> GetVersionsAsync(CancellationToken ct = default) {
@@ -53,7 +66,7 @@ public sealed class VanillaInstaller : InstallerBase {
             .GetStreamAsync(HttpCompletionOption.ResponseContentRead, ct);
 
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-        
+
         var versions = document.RootElement
             .GetProperty("versions")
             .Deserialize<IEnumerable<VersionManifestEntry>>(
@@ -63,53 +76,19 @@ public sealed class VanillaInstaller : InstallerBase {
         return [.. versions];
     }
 
-    private async Task<MinecraftInstallResult> ExecuteAsync(
-        InstallTask task,
-        IProgress<InstallProgress>? progress,
-        int maxConcurrency,
-        CancellationToken ct) {
-        var installContext = new InstallContext {
-            Target = _target,
-            Source = _source
-        };
-
-        var result = await InstallTaskExecutor.Default.ExecuteAsync(
-            task,
-            installContext,
-            maxConcurrency,
-            new Progress<InstallProgress>(p => {
-                progress?.Report(p);
-                ReportProgress(p);
-            }),
-            ct);
-
-        ReportCompleted(result.IsSuccess, result.Failures.FirstOrDefault());
-
-        var resolved = installContext.GetState<MinecraftContext>("resolved-context");
-        var entry = resolved?.Entry
-            ?? installContext.GetState<MinecraftEntry>("seed-entry")
-            ?? new MinecraftEntry { InstancePath = _target.Root.FullName };
-
-        return new MinecraftInstallResult {
-            Target = _target,
-            Minecraft = resolved,
-            VersionJsonPath = installContext.GetState<string>("version-json-path") ?? string.Empty,
-            ClientJarPath = _target.Layout.GetVersionJarPath(entry)
-        };
-    }
-
     private static async ValueTask DownloadVersionAsync(
         VersionManifestEntry version,
-        InstallContext context,
-        IProgress<InstallStepProgress> progress,
+        MinecraftTarget target,
+        InstallState state,
+        Action<long, long> report,
         CancellationToken ct) {
-        progress.Report(new InstallStepProgress { Completed = 0, Total = 1 });
+        report(0, 1);
 
-        var layout = context.Target.Layout;
+        var layout = target.Layout;
         var instancePath = Path.Combine(
-            context.Target.Root.FullName,
+            target.Root.FullName,
             layout.GetInstanceDirectory(version.Id));
-        
+
         var seed = new MinecraftEntry {
             Id = version.Id,
             Name = version.Id,
@@ -117,8 +96,8 @@ public sealed class VanillaInstaller : InstallerBase {
         };
         var jsonPath = layout.GetVersionJsonPath(seed);
 
-        context.SetState("seed-entry", seed);
-        context.SetState("version-json-path", jsonPath);
+        state.Set("seed-entry", seed);
+        state.Set("version-json-path", jsonPath);
 
         await using var input = await version.Url
             .GetStreamAsync(HttpCompletionOption.ResponseContentRead, ct);
@@ -136,19 +115,20 @@ public sealed class VanillaInstaller : InstallerBase {
 
         await input.CopyToAsync(output, ct);
 
-        progress.Report(new InstallStepProgress { Completed = 1, Total = 1 });
+        report(1, 1);
     }
 
     private static async ValueTask ResolveVersionAsync(
-        InstallContext context,
-        IProgress<InstallStepProgress> progress,
+        MinecraftTarget target,
+        InstallState state,
+        Action<long, long> report,
         CancellationToken ct) {
-        progress.Report(new InstallStepProgress { Completed = 0, Total = 1 });
+        report(0, 1);
 
-        var seed = context.GetState<MinecraftEntry>("seed-entry")
-            ?? throw new InvalidOperationException("Seed entry not found in install context.");
-        var jsonPath = context.GetState<string>("version-json-path")
-            ?? throw new InvalidOperationException("Version JSON path not found in install context.");
+        var seed = state.Get<MinecraftEntry>("seed-entry")
+            ?? throw new InvalidOperationException("Seed entry not found in install state.");
+        var jsonPath = state.Get<string>("version-json-path")
+            ?? throw new InvalidOperationException("Version JSON path not found in install state.");
 
         var json = await File.ReadAllTextAsync(jsonPath, ct);
         using var document = JsonDocument.Parse(json);
@@ -157,25 +137,26 @@ public sealed class VanillaInstaller : InstallerBase {
             MinecraftVersion = seed.Id
         };
 
-        context.SetState("resolved-context", new MinecraftContext {
-            Format = context.Target.Format,
-            Layout = context.Target.Layout,
+        state.Set("resolved-context", new MinecraftContext {
+            Format = target.Format,
+            Layout = target.Layout,
             Entry = entry
         });
 
-        progress.Report(new InstallStepProgress { Completed = 1, Total = 1 });
+        report(1, 1);
     }
 
     private static async ValueTask DownloadResourcesAsync(
-        InstallContext context,
-        IProgress<InstallStepProgress> progress,
+        DownloadSource source,
+        InstallState state,
+        Action<long, long> report,
         CancellationToken ct) {
-        var mc = context.GetState<MinecraftContext>("resolved-context")
-            ?? throw new InvalidOperationException("Resolved context not found in install context.");
+        var mc = state.Get<MinecraftContext>("resolved-context")
+            ?? throw new InvalidOperationException("Resolved context not found in install state.");
 
-        using var downloader = context.CreateResourceDownloader(mc.Layout);
+        using var downloader = new ResourceDownloader(DefaultDownloader.Default, source, mc.Layout, null);
         downloader.ProgressChanged += (_, args) =>
-            progress.Report(new InstallStepProgress { Completed = args.CompletedCount, Total = args.TotalCount });
+            report(args.CompletedCount, args.TotalCount);
 
         var result = await downloader.DownloadAsync(mc.Entry, ct);
         if (result.FailCount > 0)
@@ -184,17 +165,17 @@ public sealed class VanillaInstaller : InstallerBase {
     }
 
     private static async ValueTask ReconstructAssetsAsync(
-        InstallContext context,
-        IProgress<InstallStepProgress> progress,
+        InstallState state,
+        Action<long, long> report,
         CancellationToken ct) {
-        progress.Report(new InstallStepProgress { Completed = 0, Total = 1 });
+        report(0, 1);
 
-        var mc = context.GetState<MinecraftContext>("resolved-context")
-            ?? throw new InvalidOperationException("Resolved context not found in install context.");
+        var mc = state.Get<MinecraftContext>("resolved-context")
+            ?? throw new InvalidOperationException("Resolved context not found in install state.");
 
         await new AssetsReconstructor(mc.Layout)
             .ReconstructAsync(mc.Entry, mc.Layout.GetGameDirectory(mc.Entry), ct);
 
-        progress.Report(new InstallStepProgress { Completed = 1, Total = 1 });
+        report(1, 1);
     }
 }

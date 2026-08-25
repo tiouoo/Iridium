@@ -1,3 +1,5 @@
+using Iridium.Enums;
+
 namespace Iridium.Installation.Tasks;
 
 public sealed record InstallStepProgress {

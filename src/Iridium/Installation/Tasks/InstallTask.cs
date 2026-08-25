@@ -4,24 +4,22 @@ namespace Iridium.Installation.Tasks;
 /// An installation task to be executed: the ordered set of steps and their dependency relations.
 /// Not a linear pipeline — steps with no transitive ordering may run in parallel.
 ///
-/// A task is built with the fluent DSL and can be extended in place, so special install
-/// flows are ordinary task composition:
+/// A task is built with the fluent DSL; every step must carry an explicit
+/// <see cref="InstallStepKey"/> so steps can be referenced by <c>After</c>/<c>Before</c> and
+/// de-duplicated by <see cref="Combine"/>:
 /// <code>
-/// var task = installer.CreateTask(version)
-///     .Then("Install Forge", InstallForgeAsync)
-///     .After(VanillaSteps.ResolveVersion, "Special Processing", SpecialProcessingAsync);
+/// InstallTask.Define(task =&gt; task
+///     .Do(VanillaInstaller.DownloadVersion, "Download Version", DownloadVersionAsync)
+///     .Then(VanillaInstaller.ResolveVersion, "Resolve Version", ResolveVersionAsync));
 /// </code>
 /// </summary>
 public sealed class InstallTask {
-    private static int _keyCounter;
-
     private readonly List<InstallStepNode> _nodes = [];
     private List<InstallStepKey> _frontier = [];
 
     internal IReadOnlyList<InstallStepNode> Nodes => _nodes;
 
-    internal InstallTask() {
-    }
+    internal InstallTask() { }
 
     private InstallTask(IReadOnlyList<InstallStepNode> nodes) {
         _nodes.AddRange(nodes);
@@ -29,16 +27,9 @@ public sealed class InstallTask {
     }
 
     /// <summary>
-    /// Describes an installation task with the fluent DSL:
-    /// <code>
-    /// InstallTask.Define(task =&gt; {
-    ///     task
-    ///         .Do(VanillaSteps.DownloadVersion, "Download Version", DownloadVersionAsync)
-    ///         .Then(VanillaSteps.ResolveVersion, "Resolve Version", ResolveVersionAsync);
-    /// });
-    /// </code>
-    /// Sequential chains use <c>Do</c>/<c>Then</c>; special steps use
-    /// <c>After</c>/<c>Before</c> to insert at a specific step.
+    /// Describes an installation task with the fluent DSL. Sequential chains use
+    /// <c>Do</c>/<c>Then</c>; special steps use <c>After</c>/<c>Before</c> to insert at a
+    /// specific step.
     /// </summary>
     public static InstallTask Define(Action<InstallTask> configure) {
         ArgumentNullException.ThrowIfNull(configure);
@@ -49,39 +40,65 @@ public sealed class InstallTask {
     }
 
     /// <summary>
-    /// Merges multiple child tasks into a single DAG. Duplicate keys are kept from the first
-    /// task that declares them. Cross-task ordering is expressed with ordinary step
-    /// dependencies; independent branches run in parallel.
+    /// Merges multiple tasks into a single DAG. Steps that share the same
+    /// <see cref="InstallStepKey"/> are treated as the same logical step: the first occurrence
+    /// is kept, its dependencies are merged with the duplicates', and every step that
+    /// referenced the key keeps referencing that single instance — so the shared step runs
+    /// exactly once while all predecessor/successor relations from every task are preserved.
+    /// Steps with different keys always remain separate nodes.
     /// </summary>
     public static InstallTask Combine(params InstallTask[] tasks) {
-        var nodes = new List<InstallStepNode>();
-        var seen = new HashSet<InstallStepKey>();
+        ArgumentNullException.ThrowIfNull(tasks);
+
+        var merged = new List<InstallStepNode>();
+        var indexByKey = new Dictionary<InstallStepKey, int>();
 
         foreach (var task in tasks) {
             ArgumentNullException.ThrowIfNull(task);
-            nodes.AddRange(task._nodes.Where(node => seen.Add(node.Key)));
+
+            foreach (var node in task._nodes) {
+                if (!indexByKey.TryGetValue(node.Key, out var existingIndex)) {
+                    indexByKey[node.Key] = merged.Count;
+                    merged.Add(node);
+                } else {
+                    // Same logical step declared by another task: keep the first implementation
+                    // and merge the dependency sets.
+                    var existing = merged[existingIndex];
+                    var dependencies = existing.DependsOn
+                        .Concat(node.DependsOn)
+                        .Where(d => d != node.Key)
+                        .Distinct()
+                        .ToList();
+                    merged[existingIndex] = existing with { DependsOn = dependencies };
+                }
+            }
         }
 
-        return new InstallTask(nodes);
+        return new InstallTask(merged);
     }
 
-    /// <summary>Adds an independent step; its key is derived from the display name.</summary>
-    public InstallTask Do(string name, InstallStepHandler handler) =>
-        Do(new InstallStepKey(name), name, handler);
+    /// <summary>
+    /// Executes this task. Aggregated <see cref="InstallProgress"/> snapshots are published
+    /// synchronously through <paramref name="reportProgress"/> (in the current execution
+    /// thread, never marshalled to a UI thread); the completed <see cref="InstallResult"/>
+    /// carries the shared <see cref="InstallState"/> the steps populated.
+    /// </summary>
+    public async System.Threading.Tasks.Task<InstallResult> InstallAsync(
+        Action<InstallProgress>? reportProgress = null,
+        CancellationToken ct = default) {
+        var state = new InstallState();
+        return await InstallTaskExecutor.ExecuteAsync(this, state, reportProgress, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Adds an independent step with a stable key separate from its display name.</summary>
     public InstallTask Do(InstallStepKey key, string name, InstallStepHandler handler) =>
         Do(new InstallStep(key, name, handler));
 
-    /// <summary>Adds an independent class-based step; see the delegate overloads.</summary>
+    /// <summary>Adds an independent class-based step; see the delegate overload.</summary>
     public InstallTask Do(IInstallStep step) {
         Add(step, []);
         return this;
     }
-
-    /// <summary>Adds a step that runs after the current frontier (the steps added most recently); its key is derived from the name.</summary>
-    public InstallTask Then(string name, InstallStepHandler handler) =>
-        Then(new InstallStepKey(name), name, handler);
 
     /// <summary>Adds a step with a stable key that runs after the current frontier.</summary>
     public InstallTask Then(InstallStepKey key, string name, InstallStepHandler handler) =>
@@ -98,10 +115,6 @@ public sealed class InstallTask {
     /// Everything that previously ran after that step now waits for the inserted step too, so
     /// the pipeline becomes <c>dependsOn → new step → former successors</c>.
     /// </summary>
-    public InstallTask After(InstallStepKey dependsOn, string name, InstallStepHandler handler) =>
-        After(dependsOn, new InstallStepKey(name), name, handler);
-
-    /// <summary>Inserts a step with a stable key immediately after the step identified by <paramref name="dependsOn"/>.</summary>
     public InstallTask After(InstallStepKey dependsOn, InstallStepKey key, string name, InstallStepHandler handler) =>
         After(dependsOn, new InstallStep(key, name, handler));
 
@@ -131,10 +144,6 @@ public sealed class InstallTask {
     /// The new step waits for everything <paramref name="followedBy"/> waited for, and
     /// <paramref name="followedBy"/> now waits for the new step.
     /// </summary>
-    public InstallTask Before(InstallStepKey followedBy, string name, InstallStepHandler handler) =>
-        Before(followedBy, new InstallStepKey(name), name, handler);
-
-    /// <summary>Inserts a step with a stable key immediately before the step identified by <paramref name="followedBy"/>.</summary>
     public InstallTask Before(InstallStepKey followedBy, InstallStepKey key, string name, InstallStepHandler handler) =>
         Before(followedBy, new InstallStep(key, name, handler));
 
@@ -150,20 +159,24 @@ public sealed class InstallTask {
     }
 
     /// <summary>
-    /// Fans out several steps, each running after the current frontier. A subsequent
-    /// <see cref="Then(IInstallStep)"/> waits on all of them (join point).
+    /// Fans out several steps with explicit keys, each running after the current frontier. A
+    /// subsequent <see cref="Then(IInstallStep)"/> waits on all of them (join point).
     /// </summary>
-    public InstallTask Parallel(params (string Name, InstallStepHandler Handler)[] steps) =>
-        Parallel([.. steps.Select(static step => (IInstallStep)new InstallStep(new InstallStepKey(step.Name), step.Name, step.Handler))]);
+    public InstallTask Parallel(
+        params (InstallStepKey Key, string Name, InstallStepHandler Handler)[] steps) =>
+        Parallel([.. steps.Select(static step => (IInstallStep)new InstallStep(step.Key, step.Name, step.Handler))]);
 
     /// <summary>Fans out several class-based steps; see the tuple overload.</summary>
     public InstallTask Parallel(params IInstallStep[] steps) {
         if (steps.Length == 0)
             return this;
 
+        // Snapshot the frontier so every parallel step depends on the SAME set — they are
+        // siblings, not a chain. (Add() advances the frontier after each insert.)
+        var dependsOn = _frontier.ToArray();
         var keys = new InstallStepKey[steps.Length];
         for (var i = 0; i < steps.Length; i++)
-            keys[i] = Add(steps[i], _frontier);
+            keys[i] = Add(steps[i], dependsOn);
 
         _frontier = [.. keys];
         return this;
@@ -181,7 +194,12 @@ public sealed class InstallTask {
     private InstallStepKey Add(IInstallStep step, IReadOnlyList<InstallStepKey> dependencies) {
         ArgumentNullException.ThrowIfNull(step);
 
-        var key = ReserveKey(step.Key);
+        var key = step.Key;
+        if (string.IsNullOrWhiteSpace(key.Value))
+            throw new InvalidOperationException("Install step must declare a non-empty InstallStepKey.");
+        if (_nodes.Any(n => n.Key == key))
+            throw new InvalidOperationException($"Install task already contains step '{key}'.");
+
         var deps = dependencies.Where(d => d != key).Distinct().ToList();
         _nodes.Add(new InstallStepNode { Key = key, Step = step, DependsOn = deps });
         _frontier = [key];
@@ -204,15 +222,6 @@ public sealed class InstallTask {
         if (_nodes.All(n => n.Key != id))
             throw new InvalidOperationException($"Install task does not contain step '{id}'.");
     }
-
-    private InstallStepKey ReserveKey(InstallStepKey preferred) {
-        if (!string.IsNullOrWhiteSpace(preferred.Value) && _nodes.All(n => n.Key != preferred))
-            return preferred;
-
-        return GenerateKey();
-    }
-
-    private static InstallStepKey GenerateKey() => new($"step-{Interlocked.Increment(ref _keyCounter)}");
 
     private List<InstallStepKey> Leaves() {
         var depended = _nodes.SelectMany(n => n.DependsOn).ToHashSet();
