@@ -11,13 +11,14 @@ public partial class CurseForgeClient {
         ArgumentNullException.ThrowIfNull(options);
         
         var url = BaseUrl.AppendPathSegments("mods", "search")
-            .SetQueryParam("gameId", MinecraftGameId)
+            .SetQueryParam("gameId", options.CurseForgeGameId)
             .SetQueryParam("sortOrder", options.SortOrder == SortOrder.Asc ? "asc" : "desc")
             .SetQueryParam("sortField", options.Sort.ToCurseForgeSortField())
             .SetQueryParam("index", Math.Max(0, (options.Page - 1) * options.PageSize))
             .SetQueryParam("pageSize", Math.Clamp(options.PageSize, 1, 50));
 
-        if (options.Type.ToCurseForgeClassId() is { } classId)
+        // classId 表仅对 Minecraft Java（gameId 432）有效，其他版本（如基岩版 78022）不附加 classId 过滤。
+        if (options.CurseForgeGameId == MinecraftGameId && options.Type.ToCurseForgeClassId() is { } classId)
             url = url.SetQueryParam("classId", classId);
 
         var tags = options.Tags

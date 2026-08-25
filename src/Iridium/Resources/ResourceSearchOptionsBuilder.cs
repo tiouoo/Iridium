@@ -13,6 +13,7 @@ public sealed class ResourceSearchOptionsBuilder {
     private ResourceSource _source = ResourceSource.All;
     private int _page = 1;
     private int _pageSize = 40;
+    private int _curseForgeGameId = 432;
     private string? _query;
     private string? _gameVersion;
     private SortOrder _sortOrder = SortOrder.Desc;
@@ -26,6 +27,8 @@ public sealed class ResourceSearchOptionsBuilder {
     public ResourceSearchOptionsBuilder Page(int page) { _page = page; return this; }
 
     public ResourceSearchOptionsBuilder PageSize(int pageSize) { _pageSize = pageSize; return this; }
+
+    public ResourceSearchOptionsBuilder CurseForgeGameId(int gameId) { _curseForgeGameId = gameId; return this; }
 
     public ResourceSearchOptionsBuilder Query(string query) { _query = query; return this; }
 
@@ -85,6 +88,7 @@ public sealed class ResourceSearchOptionsBuilder {
         Source = _source,
         Page = _page,
         PageSize = _pageSize,
+        CurseForgeGameId = _curseForgeGameId,
         Query = _query,
         GameVersion = _gameVersion,
         SortOrder = _sortOrder,

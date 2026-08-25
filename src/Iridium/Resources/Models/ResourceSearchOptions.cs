@@ -7,6 +7,8 @@ public sealed class ResourceSearchOptions {
 
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 40;
+
+    public int CurseForgeGameId { get; init; } = 432;
     
     public string? Query { get; init; }
     public string? GameVersion { get; init; }
