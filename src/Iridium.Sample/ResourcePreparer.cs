@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using Iridium.Download;
-using Iridium.Models.Minecraft;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Sample;
 
@@ -10,7 +10,7 @@ namespace Iridium.Sample;
 /// </summary>
 internal static class ResourcePreparer {
     public static async Task EnsureAsync(MinecraftEntry entry, CancellationToken cancellationToken = default) {
-        var layout = entry.Layout ?? new Iridium.Parsers.Launch.DefaultMinecraftLayoutFactory().Create(entry.Format);
+        var layout = entry.Layout ?? new Iridium.Launch.DefaultMinecraftLayoutFactory().Create(entry.Format);
 
         using var downloader = new ResourceDownloader(DownloadSource.Official, layout: layout);
         var stopwatch = Stopwatch.StartNew();

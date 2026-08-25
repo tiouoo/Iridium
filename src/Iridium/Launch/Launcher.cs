@@ -3,11 +3,9 @@ using System.Text;
 using Iridium.Download;
 using Iridium.Extensions;
 using Iridium.Installation;
-using Iridium.Interfaces.Launch;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Launch;
-using Iridium.Models.Minecraft;
-using Iridium.Parsers.Launch;
+using Iridium.Launch;
+using Iridium.Launch.Models;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Launch;
 
@@ -43,7 +41,6 @@ public sealed class Launcher {
             await entry.ExtractNativesAsync(arguments.Natives, directories.NativesDirectory, cancellationToken: cancellationToken);
 
         List<string> launchArgs = [.. arguments.JvmArguments, arguments.MainClass, .. arguments.GameArguments];
-
         var javaPath = config.JavaPath.JavaPath;
         ProcessStartInfo startInfo;
 

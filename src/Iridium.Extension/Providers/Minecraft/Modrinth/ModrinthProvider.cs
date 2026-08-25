@@ -1,8 +1,8 @@
 using Iridium.Enums;
 using Iridium.Extension.Parsers.Launch;
 using Iridium.Extension.Parsers.Minecraft;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Minecraft;
+using Iridium.Minecraft;
+using Iridium.Minecraft.Models;
 using Microsoft.Data.Sqlite;
 
 namespace Iridium.Extension.Providers.Minecraft.Modrinth;

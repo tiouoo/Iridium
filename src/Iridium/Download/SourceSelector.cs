@@ -2,8 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Flurl.Http;
 using Iridium.Enums;
-using Iridium.Interfaces.Resources;
-using Iridium.Enums.Resources;
+using Iridium.Resources;
 
 namespace Iridium.Download;
 
@@ -70,11 +69,12 @@ public static class SourceSelector {
     }
 
     public static SourceSelectionMode GetResourceMode(string url) {
-        return ResourceMirror?.GetSource(url) switch {
-            ResourceSource.Modrinth => _modrinthResourceMode,
-            ResourceSource.CurseForge => _curseForgeResourceMode,
-            _ => _mode
-        };
+        if (url.Contains("modrinth", StringComparison.OrdinalIgnoreCase))
+            return _modrinthResourceMode;
+        if (url.Contains("forgecdn", StringComparison.OrdinalIgnoreCase) ||
+            url.Contains("curseforge", StringComparison.OrdinalIgnoreCase))
+            return _curseForgeResourceMode;
+        return _mode;
     }
 
     private static async Task<IReadOnlyList<string>> OrderByLatencyAsync(

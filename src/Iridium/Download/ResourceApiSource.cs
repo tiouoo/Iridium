@@ -1,5 +1,5 @@
 using Flurl;
-using Iridium.Enums.Resources;
+using Iridium.Enums;
 
 namespace Iridium.Download;
 

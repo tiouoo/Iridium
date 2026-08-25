@@ -1,5 +1,5 @@
 /*
-using Iridium.Interfaces.Resources;
+using Iridium.Resources;
 
 namespace Iridium.Helpers.Resources;
 

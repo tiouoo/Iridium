@@ -1,5 +1,5 @@
 using Iridium.Enums;
-using Iridium.Models.Minecraft;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Extension.Parsers.Launch;
 

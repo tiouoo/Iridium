@@ -1,5 +1,5 @@
-using Iridium.Interfaces.Installation;
-using Iridium.Models.Installation;
+using Iridium.Installation;
+using Iridium.Installation.Models;
 
 namespace Iridium.Installation;
 

@@ -1,10 +1,8 @@
 using System.Text.Json;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Download;
-using Iridium.Models.Minecraft;
 using Iridium.Launch;
-using Iridium.Parsers.Launch;
-using Iridium.Parsers.Minecraft;
+using Iridium.Download.Models;
+using Iridium.Minecraft.Models;
+using Iridium.Minecraft;
 
 namespace Iridium.Download;
 

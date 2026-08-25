@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using Iridium.Models.Launch;
-using Iridium.Models.Minecraft;
+using Iridium.Launch.Models;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Launch;
 

@@ -1,6 +1,6 @@
 using Iridium.Enums;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Minecraft;
+using Iridium.Launch;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Extension.Parsers.Launch;
 

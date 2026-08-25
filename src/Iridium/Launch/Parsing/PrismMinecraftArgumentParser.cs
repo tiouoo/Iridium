@@ -1,0 +1,14 @@
+using Iridium.Launch;
+using Iridium.Minecraft.Models;
+
+namespace Iridium.Launch;
+
+/// <summary>
+/// Builds launch arguments for Prism Launcher instances. The entry manifest is fully
+/// resolved by the Prism provider (components merged from prism's metadata store); the
+/// manifest-driven argument assembly is shared with the standard resolver.
+/// </summary>
+public sealed class PrismMinecraftArgumentParser : StandardMinecraftArgumentParser {
+    protected override IMinecraftLayout CreateLayout(MinecraftEntry entry) => 
+        new PrismMinecraftLayout();
+}

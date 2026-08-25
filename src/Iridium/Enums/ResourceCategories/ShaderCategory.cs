@@ -1,7 +1,7 @@
-﻿using Iridium.Enums.Resources;
-using Iridium.Models.Attributes;
+﻿using Iridium.Enums;
+using Iridium.Resources.Attributes;
 
-namespace Iridium.Enums.ResourceCategories;
+namespace Iridium.Enums;
 
 [ResourceCategoryType(ResourceType.Shader)]
 public enum ShaderCategory {

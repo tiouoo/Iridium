@@ -3,8 +3,8 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Channels;
 using Flurl.Http;
-using Iridium.Interfaces.Resources;
-using Iridium.Models.Download;
+using Iridium.Download.Models;
+using Iridium.Resources;
 using Microsoft.Win32.SafeHandles;
 
 namespace Iridium.Download;

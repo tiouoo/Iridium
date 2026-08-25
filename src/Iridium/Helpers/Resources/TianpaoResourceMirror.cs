@@ -1,5 +1,4 @@
-using Iridium.Interfaces.Resources;
-using Iridium.Enums.Resources;
+using Iridium.Resources;
 
 namespace Iridium.Helpers.Resources;
 
@@ -17,21 +16,6 @@ public sealed class TianpaoResourceMirror : IResourceMirror {
         ("https://media.forgecdn.net/", "https://mod.telepao.com/media/"),
         ("http://media.forgecdn.net/", "https://mod.telepao.com/media/")
     ];
-
-    public ResourceSource? GetSource(string url) {
-        if (string.IsNullOrWhiteSpace(url))
-            return null;
-
-        if (url.StartsWith("https://cdn.modrinth.com/data/", StringComparison.OrdinalIgnoreCase) ||
-            url.StartsWith("http://cdn.modrinth.com/data/", StringComparison.OrdinalIgnoreCase))
-            return ResourceSource.Modrinth;
-
-        if (url.Contains("forgecdn.net/", StringComparison.OrdinalIgnoreCase) ||
-            url.Contains("service.overwolf.wtf/", StringComparison.OrdinalIgnoreCase))
-            return ResourceSource.CurseForge;
-
-        return null;
-    }
 
     public string? TryRewrite(string url) {
         if (string.IsNullOrWhiteSpace(url))

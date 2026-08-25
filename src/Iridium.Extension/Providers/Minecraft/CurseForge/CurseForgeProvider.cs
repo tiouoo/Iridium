@@ -2,8 +2,8 @@ using System.Text.Json;
 using Iridium.Enums;
 using Iridium.Extension.Parsers.Launch;
 using Iridium.Extension.Parsers.Minecraft;
-using Iridium.Interfaces.Minecraft;
-using Iridium.Models.Minecraft;
+using Iridium.Minecraft;
+using Iridium.Minecraft.Models;
 
 namespace Iridium.Extension.Providers.Minecraft.CurseForge;
 
