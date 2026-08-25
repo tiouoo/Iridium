@@ -1,4 +1,6 @@
-using Iridium.Installation;
+
+using Iridium.Installation.Tasks;
+
 namespace Iridium.Models.Installation;
 
 public sealed class InstallProgressChangedEventArgs : EventArgs {

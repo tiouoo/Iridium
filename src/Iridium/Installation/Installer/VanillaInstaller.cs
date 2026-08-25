@@ -4,64 +4,46 @@ using Iridium.Download;
 using Iridium.Models.Installation;
 using Iridium.Minecraft;
 using Iridium.Models.Minecraft;
+using Iridium.Installation.Tasks;
 
-namespace Iridium.Installation;
+namespace Iridium.Installation.Installer;
 
 public sealed class VanillaInstaller : InstallerBase {
     private const string VersionManifestUrl = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
     
     private readonly MinecraftTarget _target;
     private readonly DownloadSource _source;
-
+    
+    public static readonly InstallStepKey DownloadVersion = nameof(DownloadVersion);
+    public static readonly InstallStepKey ResolveVersion = nameof(ResolveVersion);
+    public static readonly InstallStepKey DownloadResources = nameof(DownloadResources);
+    public static readonly InstallStepKey ReconstructAssets = nameof(ReconstructAssets);
+    
     public VanillaInstaller(MinecraftTarget target, DownloadSource? source = null) {
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _source = source ?? DownloadSource.Official;
     }
-
-    /// <summary>
-    /// Builds the vanilla installation task: download manifest → resolve → download resources →
-    /// deploy assets. Special installers extend the returned task with
-    /// <see cref="InstallTask.Then(IInstallStep)"/> / <see cref="InstallTask.After(string, IInstallStep)"/> /
-    /// <see cref="InstallTask.Before(string, IInstallStep)"/>, or combine tasks with
-    /// <see cref="InstallTask.Combine"/>.
-    /// </summary>
+    
     public static InstallTask CreateTask(VersionManifestEntry version) {
         ArgumentNullException.ThrowIfNull(version);
 
-        return InstallTask.Define(task => {
-            task
-                .Do("version-json", "Download Version", (context, progress, ct) => DownloadVersionAsync(version, context, progress, ct))
-                .Then("resolve", "Resolve Version", ResolveVersionAsync)
-                .Then("resources", "Download Resources", DownloadResourcesAsync)
-                .Then("assets", "Reconstruct Assets", ReconstructAssetsAsync);
-        });
+        return InstallTask.Define(task => task
+            .Do(DownloadVersion, "Download Version", (context, progress, ct) => DownloadVersionAsync(version, context, progress, ct))
+            .Then(ResolveVersion, "Resolve Version", ResolveVersionAsync)
+            .Then(DownloadResources, "Download Resources", DownloadResourcesAsync)
+            .Then(ReconstructAssets, "Reconstruct Assets", ReconstructAssetsAsync));
     }
-
-    /// <summary>
-    /// Installs <paramref name="version"/>. <paramref name="configure"/> can append or insert
-    /// special steps into the generated task; <paramref name="progress"/> receives the full
-    /// step-wise snapshot (the <see cref="InstallerBase.ProgressChanged"/> event also fires).
-    /// </summary>
+    
     public async Task<MinecraftInstallResult> InstallAsync(
         VersionManifestEntry version,
-        Action<InstallTask>? configure = null,
         IProgress<InstallProgress>? progress = null,
+        Action<InstallTask>? configure = null,
         int maxConcurrency = 32,
         CancellationToken ct = default) {
         ArgumentNullException.ThrowIfNull(version);
 
         var task = CreateTask(version);
         configure?.Invoke(task);
-
-        return await ExecuteAsync(task, progress, maxConcurrency, ct);
-    }
-
-    public async Task<MinecraftInstallResult> InstallAsync(
-        InstallTask task,
-        IProgress<InstallProgress>? progress = null,
-        int maxConcurrency = 32,
-        CancellationToken ct = default) {
-        ArgumentNullException.ThrowIfNull(task);
 
         return await ExecuteAsync(task, progress, maxConcurrency, ct);
     }
@@ -124,11 +106,10 @@ public sealed class VanillaInstaller : InstallerBase {
         progress.Report(new InstallStepProgress { Completed = 0, Total = 1 });
 
         var layout = context.Target.Layout;
-        // MinecraftTarget.Root is the Game Root; the instance directory is derived by the
-        // layout from the instance/version id.
         var instancePath = Path.Combine(
             context.Target.Root.FullName,
             layout.GetInstanceDirectory(version.Id));
+        
         var seed = new MinecraftEntry {
             Id = version.Id,
             Name = version.Id,

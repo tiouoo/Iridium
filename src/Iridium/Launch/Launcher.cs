@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Text;
 using Iridium.Extensions;
+using Iridium.Installation;
 using Iridium.Models.Launch;
 using Iridium.Minecraft;
 using Iridium.Interfaces;
-using Iridium.Installation;
 
 namespace Iridium.Launch;
 

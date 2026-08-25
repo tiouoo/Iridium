@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
-using Iridium.Enums;
 
-namespace Iridium.Installation;
+namespace Iridium.Installation.Tasks;
 
 /// <summary>
 /// Executes an <see cref="InstallTask"/> DAG: schedules ready steps, runs independent ones
@@ -29,7 +28,7 @@ public sealed class InstallTaskExecutor {
     /// Executes the task. <paramref name="maxDownloadConcurrency"/> is the uniform download
     /// concurrency limit applied to every download step of this execution.
     /// </summary>
-    public async Task<InstallResult> ExecuteAsync(
+    public async System.Threading.Tasks.Task<InstallResult> ExecuteAsync(
         InstallTask task,
         InstallContext context,
         int maxDownloadConcurrency = 32,
@@ -44,7 +43,7 @@ public sealed class InstallTaskExecutor {
 
         task.Validate();
 
-        var states = nodes.ToDictionary(n => n.Key, n => new StepState { Step = n.Step }, StringComparer.Ordinal);
+        var states = nodes.ToDictionary(n => n.Key, n => new StepState { Step = n.Step });
 
         context.DownloadConcurrency = Math.Max(1, maxDownloadConcurrency);
 
@@ -60,7 +59,7 @@ public sealed class InstallTaskExecutor {
             foreach (var node in nodes) {
                 var state = states[node.Key];
                 steps.Add(new InstallStepProgress {
-                    Id = node.Key,
+                    Key = node.Key,
                     Name = state.Step.Name,
                     Status = state.Status,
                     Completed = state.Completed,
@@ -86,17 +85,16 @@ public sealed class InstallTaskExecutor {
         using var semaphore = new SemaphoreSlim(_maxConcurrency, _maxConcurrency);
         var completions = nodes.ToDictionary(
             n => n.Key,
-            _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
-            StringComparer.Ordinal);
+            _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
         var failures = new ConcurrentQueue<Exception>();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        async Task RunNodeAsync(InstallStepNode node) {
+        async System.Threading.Tasks.Task RunNodeAsync(InstallStepNode node) {
             var state = states[node.Key];
             Exception? failure = null;
             try {
                 var dependencies = node.DependsOn.Select(d => completions[d].Task).ToArray();
-                await Task.WhenAll(dependencies).ConfigureAwait(false);
+                await System.Threading.Tasks.Task.WhenAll(dependencies).ConfigureAwait(false);
 
                 await semaphore.WaitAsync(linkedCts.Token).ConfigureAwait(false);
                 try {
@@ -143,7 +141,7 @@ public sealed class InstallTaskExecutor {
         }
 
         try {
-            await Task.WhenAll(nodes.Select(RunNodeAsync)).ConfigureAwait(false);
+            await System.Threading.Tasks.Task.WhenAll(nodes.Select(RunNodeAsync)).ConfigureAwait(false);
         } finally {
             stopwatch.Stop();
         }

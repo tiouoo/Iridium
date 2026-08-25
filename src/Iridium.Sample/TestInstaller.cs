@@ -1,24 +1,31 @@
 using System.Diagnostics;
 using Iridium.Download;
-using Iridium.Installation;
+using Iridium.Installation.Tasks;
 using Iridium.Models.Minecraft;
 
 namespace Iridium.Sample;
 
 /// <summary>
 /// Verifies that the install DAG scheduler runs independent steps in parallel using the
-/// new <c>Do</c>/<c>After</c> DSL. Inserting Step2 then Step3 after Step1 makes Step3 the
-/// pipeline gate, so Step2 runs in parallel with Step3 → Step4. Expected total ~11s; a fully
-/// sequential run would be 16s.
+/// new <c>Do</c>/<c>After</c> DSL with type-safe <see cref="InstallStepKey"/>. Inserting
+/// Step2 then Step3 after Step1 makes Step3 the pipeline gate, so Step2 runs in parallel
+/// with Step3 → Step4. Expected total ~11s; a fully sequential run would be 16s.
 /// </summary>
 public static class TestInstaller {
+    private static readonly InstallStepKey Step1 = new("test.step-1");
+    private static readonly InstallStepKey Step2 = new("test.step-2");
+    private static readonly InstallStepKey Step3 = new("test.step-3");
+    private static readonly InstallStepKey Step4 = new("test.step-4");
+
     public static InstallTask CreateTask() =>
         InstallTask.Define(task => {
-            task.Do("Step1", (context, progress, ct) => WaitAsync("Step1", 3, progress, ct));
+            task.Do(Step1, "Step1", (context, progress, ct) => WaitAsync("Step1", 3, progress, ct));
+            
 
-            task.After("Step1", "Step2", (context, progress, ct) => WaitAsync("Step2", 5, progress, ct));
-            task.After("Step1", "Step3", (context, progress, ct) => WaitAsync("Step3", 3, progress, ct));
-            task.After("Step3", "Step4", (context, progress, ct) => WaitAsync("Step4", 5, progress, ct));
+            
+            task.After(Step1, Step2, "Step2", (context, progress, ct) => WaitAsync("Step2", 5, progress, ct));
+            task.After(Step1, Step3, "Step3", (context, progress, ct) => WaitAsync("Step3", 3, progress, ct));
+            task.After(Step3, Step4, "Step4", (context, progress, ct) => WaitAsync("Step4", 5, progress, ct));
         });
 
     public static async Task RunAsync() {

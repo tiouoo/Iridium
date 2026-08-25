@@ -1,6 +1,6 @@
 ﻿using Iridium;
 using Iridium.Authentication;
-using Iridium.Installation;
+using Iridium.Installation.Installer;
 using Iridium.Java;
 using Iridium.Launch;
 using Iridium.Models.Authentication;

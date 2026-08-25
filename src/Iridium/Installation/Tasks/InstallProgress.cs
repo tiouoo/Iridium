@@ -1,10 +1,7 @@
-using Iridium.Enums;
+namespace Iridium.Installation.Tasks;
 
-namespace Iridium.Installation;
-
-/// <summary>Progress of a single install step.</summary>
 public sealed record InstallStepProgress {
-    public string Id { get; init; } = string.Empty;
+    public InstallStepKey Key { get; init; }
     public string Name { get; init; } = string.Empty;
     
     public InstallStepStatus Status { get; init; } = InstallStepStatus.Pending;
@@ -18,10 +15,6 @@ public sealed record InstallStepProgress {
     public double Progress => Total > 0 ? Math.Clamp(Completed / (double)Total, 0d, 1d) : 0d;
 }
 
-/// <summary>
-/// A complete snapshot of the whole install task at one point in time: every step, its
-/// status and workload, plus aggregated step/unit statistics.
-/// </summary>
 public sealed record InstallProgress {
     public IReadOnlyList<InstallStepProgress> Steps { get; init; } = [];
 

@@ -1,9 +1,8 @@
 using Iridium.Download;
 using Iridium.Interfaces;
-using Iridium.Minecraft;
 using Iridium.Models.Minecraft;
 
-namespace Iridium.Installation;
+namespace Iridium.Installation.Tasks;
 
 /// <summary>
 /// Shared state for one install execution: the install target, the download source and the

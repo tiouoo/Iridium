@@ -116,22 +116,23 @@ var installer = new VanillaInstaller(target);   // 构造时绑定安装目标
 public InstallTask CreateTask(VersionManifestEntry version) =>
     InstallTask.Define(task => {
         task
-            .Do("version-json", "Download Version", DownloadVersionAsync)
-            .Then("resolve", "Resolve Version", ResolveVersionAsync)
-            .Then("resources", "Download Resources", DownloadResourcesAsync)
-            .Then("assets", "Reconstruct Assets", ReconstructAssetsAsync);
+            .Do(VanillaSteps.DownloadVersion, "Download Version", DownloadVersionAsync)
+            .Then(VanillaSteps.ResolveVersion, "Resolve Version", ResolveVersionAsync)
+            .Then(VanillaSteps.DownloadResources, "Download Resources", DownloadResourcesAsync)
+            .Then(VanillaSteps.ReconstructAssets, "Reconstruct Assets", ReconstructAssetsAsync);
     });
 ```
 
 - `Do`：添加一个独立步骤（新 DAG 根）。
 - `Then`：追加一个步骤，等待当前 frontier（最近添加的步骤）完成。
-- `After(id, ...)`：把步骤**插入**到指定步骤之后（该步骤原来的后继会改为等待新步骤）。
-- `Before(id, ...)`：把步骤**插入**到指定步骤之前（新步骤等待其前驱）。
+- `After(key, ...)`：把步骤**插入**到指定步骤之后（该步骤原来的后继会改为等待新步骤）。
+- `Before(key, ...)`：把步骤**插入**到指定步骤之前（新步骤等待其前驱）。
 - `Parallel(...)`：从当前 frontier 扇出多个并行步骤；后续 `Then` 等待全部并行分支（汇合点）。
 - `Combine`（静态）：把多个 `InstallTask` 合并成一个 DAG。
 
-步骤的**稳定 ID**（如 `resolve`）与**显示名称**（如 `Resolve Version`）分离：依赖 / 插入用 ID，
-`InstallProgress` 同时展示两者。第一步 `Do` 的 ID 必须显式指定（否则用显示名称作为 ID）。
+步骤的**稳定 Key**（类型安全的 `InstallStepKey`，如 `VanillaSteps.ResolveVersion`）与**显示名称**
+（如 `Resolve Version`）严格分离：依赖 / 插入用 `InstallStepKey`，`InstallProgress` 同时展示两者。
+每种 Installer 自己维护自己的 Key（如 `VanillaSteps`），字符串只出现在 Key 定义处。
 
 特殊格式通过 `CreateTask(version)` 返回的 Task 直接扩展，无需 Contributor：
 
@@ -140,9 +141,9 @@ public InstallTask CreateTask(VersionManifestEntry version) =>
 var task = installer.CreateTask(version)
     .Then("Install Forge", InstallForgeAsync);
 
-// 插入到 "resolve" 之后
+// 插入到 Resolve Version 之后
 var task = installer.CreateTask(version)
-    .After("resolve", "Special Processing", SpecialProcessingAsync);
+    .After(VanillaSteps.ResolveVersion, "Special Processing", SpecialProcessingAsync);
 ```
 
 简单步骤就是 **delegate**，不需要任何 Step 类：
@@ -281,8 +282,7 @@ Step 之间通过 `context.SetState / GetState<T>` 传递中间结果（如 vers
 
 ```csharp
 using Iridium;
-using Iridium.Installation;
-using Iridium.Minecraft;
+using Iridium.Installation.Installer;
 using Iridium.Models.Minecraft;
 
 IridiumConfig.Configure(new IridiumContext());

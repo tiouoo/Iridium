@@ -1,7 +1,6 @@
 using System.Text.Json;
-using Iridium.Minecraft.Layout;
-using Iridium.Models.Minecraft;
 using Iridium.Interfaces;
+using Iridium.Models.Minecraft;
 
 namespace Iridium.Installation;
 
@@ -51,7 +50,7 @@ public sealed class AssetsReconstructor {
     /// <returns>
     /// The number of asset objects for which at least one target was created.
     /// </returns>
-    public async Task ReconstructAsync(
+    public async System.Threading.Tasks.Task ReconstructAsync(
         MinecraftEntry entry,
         string gameDirectory,
         CancellationToken cancellationToken = default) {
@@ -140,7 +139,7 @@ public sealed class AssetsReconstructor {
         }
     }
 
-    private static async Task<JsonDocument> ReadIndexAsync(
+    private static async System.Threading.Tasks.Task<JsonDocument> ReadIndexAsync(
         string indexPath,
         CancellationToken cancellationToken) {
         await using var stream = new FileStream(
@@ -155,7 +154,7 @@ public sealed class AssetsReconstructor {
             .ConfigureAwait(false);
     }
 
-    private static async Task<bool> DeployAsync(
+    private static async System.Threading.Tasks.Task<bool> DeployAsync(
         string source,
         string target,
         CancellationToken cancellationToken) {
@@ -194,7 +193,7 @@ public sealed class AssetsReconstructor {
         }
     }
 
-    private static async Task CopyFileAsync(
+    private static async System.Threading.Tasks.Task CopyFileAsync(
         string source,
         string target,
         CancellationToken cancellationToken) {

@@ -1,4 +1,4 @@
-namespace Iridium.Enums;
+namespace Iridium.Installation.Tasks;
 
 /// <summary>Lifecycle status of a single install step.</summary>
 public enum InstallStepStatus {

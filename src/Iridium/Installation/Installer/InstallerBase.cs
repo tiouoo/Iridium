@@ -1,6 +1,7 @@
+using Iridium.Installation.Tasks;
 using Iridium.Models.Installation;
 
-namespace Iridium.Installation;
+namespace Iridium.Installation.Installer;
 
 public abstract class InstallerBase {
     public event EventHandler<InstallerCompletedEventArgs>? Completed;
