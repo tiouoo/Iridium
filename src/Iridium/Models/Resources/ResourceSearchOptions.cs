@@ -17,6 +17,8 @@ public sealed class ResourceSearchOptions {
     public ResourceType Type { get; init; } = ResourceType.Mod;
     public ResourceSort Sort { get; init; } = ResourceSort.Relevance;
     public ResourceLoaderType Loader { get; init; } = ResourceLoaderType.Any;
+    public ResourceEnvironment Environment { get; init; } = ResourceEnvironment.Any;
     
     public IReadOnlyList<ResourceCategory> Tags { get; init; } = [];
+    public IReadOnlyList<ResourceCategory> ExcludedTags { get; init; } = [];
 }
