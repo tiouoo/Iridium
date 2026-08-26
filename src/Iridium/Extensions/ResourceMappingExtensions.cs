@@ -287,6 +287,7 @@ public static class ResourceMappingExtensions {
     };
 
     public static int ToCurseForgeSortField(this ResourceSort sort) => sort switch {
+        ResourceSort.Relevance => 1,
         ResourceSort.Popularity => 2,
         ResourceSort.Updated or ResourceSort.LastUpdated => 3,
         ResourceSort.Name => 4,
@@ -295,7 +296,7 @@ public static class ResourceMappingExtensions {
         ResourceSort.Newest or ResourceSort.ReleasedDate => 11,
         ResourceSort.Follows => 12,
         ResourceSort.Rating => 13,
-        _ => 4
+        _ => 1
     };
     
     public static ResourceLoaderType? ToResourceLoaderType(this string? loader) =>

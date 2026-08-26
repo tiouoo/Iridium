@@ -50,22 +50,26 @@ public sealed class ResourceProvider {
         if (modrinthTask is not null && curseForgeTask is not null)
             await Task.WhenAll(modrinthTask, curseForgeTask);
 
-        var hits = new List<ResourceHit>(modrinthTask is not null ? 40 : 0);
+        IReadOnlyList<ResourceHit> modrinthHits = [];
+        IReadOnlyList<ResourceHit> curseForgeHits = [];
         var totalCount = 0;
 
         if (modrinthTask is not null) {
             var result = await modrinthTask;
-            hits.AddRange(result.Items);
-            totalCount += result.TotalCount;
+            modrinthHits = result.Items;
+            totalCount = result.TotalCount;
         }
 
         if (curseForgeTask is not null) {
             var result = await curseForgeTask;
-            hits.AddRange(result.Items);
-            totalCount += result.TotalCount;
+            curseForgeHits = result.Items;
+            totalCount = modrinthTask is null
+                ? result.TotalCount
+                : Math.Max(totalCount, result.TotalCount);
         }
 
-        return new ResourceSearchPage<ResourceHit>(Merge(hits), totalCount, options.Page, options.PageSize);
+        return new ResourceSearchPage<ResourceHit>(
+            Merge(modrinthHits, curseForgeHits, options), totalCount, options.Page, options.PageSize);
     }
 
     public async Task<ResourceSearchPage<ResourceHit>> SearchAsync(Action<ResourceSearchOptionsBuilder> configure, CancellationToken cancellationToken = default) {
@@ -76,36 +80,67 @@ public sealed class ResourceProvider {
         return await SearchAsync(builder.Build(), cancellationToken);
     }
 
-    private static List<ResourceHit> Merge(List<ResourceHit> hits) {
-        if (hits.Count < 2)
-            return hits;
+    private static List<ResourceHit> Merge(
+        IReadOnlyList<ResourceHit> modrinthHits,
+        IReadOnlyList<ResourceHit> curseForgeHits,
+        ResourceSearchOptions options) {
+        var ranked = modrinthHits.Select((hit, index) => new RankedHit(hit, index, modrinthHits.Count))
+            .Concat(curseForgeHits.Select((hit, index) => new RankedHit(hit, index, curseForgeHits.Count)))
+            .ToList();
+        if (ranked.Count < 2)
+            return ranked.Select(item => item.Hit).ToList();
 
-        var merged = new List<ResourceHit>(hits.Count);
-        foreach (var hit in hits) {
-            var index = merged.FindIndex(existing => IsSameProject(existing, hit));
-            if (index < 0) {
-                merged.Add(hit);
-                continue;
-            }
+        var maxDownloads = ranked.Max(item => item.Hit.Downloads);
+        var maxModrinthFollows = modrinthHits.Count == 0 ? 0 : modrinthHits.Max(hit => hit.Follows);
+        var maxCurseForgeDownloads = curseForgeHits.Count == 0 ? 0 : curseForgeHits.Max(hit => hit.Downloads);
 
-            if (hit.Downloads > merged[index].Downloads)
-                merged[index] = hit;
+        var ordered = options.Sort switch {
+            ResourceSort.Downloads or ResourceSort.TotalDownloads =>
+                ranked.OrderByDescending(item => item.Hit.Downloads),
+            ResourceSort.Updated or ResourceSort.LastUpdated =>
+                ranked.OrderByDescending(item => item.Hit.DateModified ?? DateTime.MinValue),
+            ResourceSort.Newest or ResourceSort.ReleasedDate =>
+                ranked.OrderByDescending(item => item.Hit.DateCreated ?? DateTime.MinValue),
+            ResourceSort.Follows => ranked.OrderByDescending(item => item.Hit.Source == ResourceSource.Modrinth
+                ? Normalize(item.Hit.Follows, maxModrinthFollows)
+                : Normalize(item.Hit.Downloads, maxCurseForgeDownloads)),
+            _ => ranked.OrderByDescending(item => RelevanceScore(item, maxDownloads,
+                !string.IsNullOrWhiteSpace(options.Query)))
+        };
+
+        var merged = new List<ResourceHit>(ranked.Count);
+        foreach (var item in ordered
+                     .ThenBy(item => item.Hit.Source)
+                     .ThenBy(item => item.Hit.Id, StringComparer.Ordinal)) {
+            if (!merged.Any(existing => IsSameProject(existing, item.Hit)))
+                merged.Add(item.Hit);
         }
 
         return merged;
     }
 
+    private static double RelevanceScore(RankedHit item, long maxDownloads, bool hasQuery) {
+        var rankScore = item.Count <= 1 ? 1d : 1d - (double)item.Index / item.Count;
+        var downloadScore = Normalize(Math.Log(1d + item.Hit.Downloads), Math.Log(1d + maxDownloads));
+        return hasQuery ? rankScore * 0.82 + downloadScore * 0.18 : rankScore * 0.55 + downloadScore * 0.45;
+    }
+
+    private static double Normalize(double value, double maximum) => maximum <= 0 ? 0 : value / maximum;
+
     private static bool IsSameProject(ResourceHit left, ResourceHit right) {
         if (left.Source == right.Source)
             return false;
 
-        if (!string.IsNullOrWhiteSpace(left.Slug) && !string.IsNullOrWhiteSpace(right.Slug))
-            return string.Equals(left.Slug, right.Slug, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(left.Slug) && !string.IsNullOrWhiteSpace(right.Slug) &&
+            string.Equals(Normalize(left.Slug), Normalize(right.Slug), StringComparison.OrdinalIgnoreCase))
+            return true;
 
         return !string.IsNullOrWhiteSpace(left.Title) && !string.IsNullOrWhiteSpace(right.Title) &&
                string.Equals(Normalize(left.Title), Normalize(right.Title), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Normalize(string value) =>
-        string.Concat(value.Where(static character => !char.IsWhiteSpace(character)));
+        string.Concat(value.Where(char.IsLetterOrDigit));
+
+    private readonly record struct RankedHit(ResourceHit Hit, int Index, int Count);
 }
