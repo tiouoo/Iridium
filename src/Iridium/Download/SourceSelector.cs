@@ -8,7 +8,7 @@ namespace Iridium.Download;
 
 public static class SourceSelector {
     private static readonly ConcurrentDictionary<string, CachedProbe> ProbeCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly SemaphoreSlim ProbeLock = new(1, 1);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> ProbeLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private static SourceSelectionMode _mode = SourceSelectionMode.Auto;
     private static TimeSpan _probeTimeout = TimeSpan.FromSeconds(3);
@@ -81,8 +81,11 @@ public static class SourceSelector {
         string primary,
         string mirror,
         CancellationToken cancellationToken) {
-        var primaryProbe = await ProbeAsync(primary, cancellationToken);
-        var mirrorProbe = await ProbeAsync(mirror, cancellationToken);
+        var primaryProbeTask = ProbeAsync(primary, cancellationToken);
+        var mirrorProbeTask = ProbeAsync(mirror, cancellationToken);
+        await Task.WhenAll(primaryProbeTask, mirrorProbeTask);
+        var primaryProbe = await primaryProbeTask;
+        var mirrorProbe = await mirrorProbeTask;
 
         if (primaryProbe.LatencyMs is null && mirrorProbe.LatencyMs is null)
             return [primary, mirror];
@@ -101,7 +104,8 @@ public static class SourceSelector {
         if (ProbeCache.TryGetValue(host, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
             return cached;
 
-        await ProbeLock.WaitAsync(cancellationToken);
+        var probeLock = ProbeLocks.GetOrAdd(host, static _ => new SemaphoreSlim(1, 1));
+        await probeLock.WaitAsync(cancellationToken);
         try {
             if (ProbeCache.TryGetValue(host, out cached) && cached.ExpiresAt > DateTime.UtcNow)
                 return cached;
@@ -110,7 +114,7 @@ public static class SourceSelector {
             ProbeCache[host] = cached;
             return cached;
         } finally {
-            ProbeLock.Release();
+            probeLock.Release();
         }
     }
 

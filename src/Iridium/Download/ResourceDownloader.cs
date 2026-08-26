@@ -106,7 +106,9 @@ public sealed class ResourceDownloader : IDisposable {
 
                 var assetPath = Path.Combine(assetsRoot, "objects", hash[..2], hash);
 
-                if (!NeedsDownload(assetPath, size, hash))
+                // Asset indexes contain tens of thousands of immutable, content-addressed files.
+                // Re-hashing every existing asset on each launch reads the entire asset store.
+                if (!NeedsDownload(assetPath, size, hash, verifyHash: false))
                     continue;
 
                 var assetEntry = new DownloadFileEntry {
@@ -237,7 +239,7 @@ private static DownloadRequest BuildRequest(DownloadFileEntry file) {
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
     
-    private static bool NeedsDownload(string localPath, long size, string? sha1) {
+    private static bool NeedsDownload(string localPath, long size, string? sha1, bool verifyHash = true) {
         if (!File.Exists(localPath))
             return true;
 
@@ -245,7 +247,7 @@ private static DownloadRequest BuildRequest(DownloadFileEntry file) {
         if (size > 0 && info.Length != size)
             return true;
 
-        if (!string.IsNullOrEmpty(sha1) && !FileSha1Matches(localPath, sha1))
+        if (verifyHash && !string.IsNullOrEmpty(sha1) && !FileSha1Matches(localPath, sha1))
             return true;
 
         return false;

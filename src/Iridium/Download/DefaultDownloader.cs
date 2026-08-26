@@ -254,6 +254,7 @@ public sealed class DefaultDownloader : IDisposable {
         if (candidates.Count == 1) {
             await DownloadFileFromSourceAsync(candidates[0], request, singlePartBuffer, limiter, cancellationToken)
                 .ConfigureAwait(false);
+            ValidateDownloadedFile(request);
             return;
         }
 
@@ -263,6 +264,7 @@ public sealed class DefaultDownloader : IDisposable {
             try {
                 await DownloadFileFromSourceAsync(url, request, singlePartBuffer, limiter, cancellationToken)
                     .ConfigureAwait(false);
+                ValidateDownloadedFile(request);
                 return;
             } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 throw;
@@ -272,6 +274,22 @@ public sealed class DefaultDownloader : IDisposable {
         }
 
         throw lastException ?? new IOException($"All download sources failed for {request.Url}");
+    }
+
+    private static void ValidateDownloadedFile(DownloadRequest request) {
+        var info = request.FileInfo;
+        if (request.Size > 0 && info.Length != request.Size)
+            throw new IOException(
+                $"Downloaded file size mismatch for {info.Name}. Expected {request.Size} bytes, but received {info.Length} bytes.");
+
+        if (string.IsNullOrWhiteSpace(request.Sha1))
+            return;
+
+        using var stream = new FileStream(info.FullName, FileMode.Open, FileAccess.Read, FileShare.Read,
+            BufferSize, FileOptions.SequentialScan);
+        var actual = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(stream));
+        if (!string.Equals(actual, request.Sha1, StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"Downloaded file SHA-1 mismatch for {info.Name}.");
     }
 
     private async Task<IReadOnlyList<string>> ResolveCandidatesAsync(
