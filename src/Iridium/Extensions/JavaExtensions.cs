@@ -1,6 +1,7 @@
 using Iridium.Enums;
 using Iridium.Java;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Minecraft;
+using Iridium.Models.Java;
 
 namespace Iridium.Extensions;
 

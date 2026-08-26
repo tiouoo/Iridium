@@ -1,18 +1,16 @@
 using System.Diagnostics;
 using Iridium.Download;
-using Iridium.Minecraft.Models;
+using Iridium.Minecraft;
 
 namespace Iridium.Sample;
 
 /// <summary>
-/// Ensures the resources (libraries / client jar / assets) referenced by an entry exist
-/// before launch, downloading any missing ones via the library's ResourceDownloader.
+/// Ensures the resources (libraries / client jar / assets) referenced by a context exist
+/// before launch, downloading any missing ones via the ResourceDownloader.
 /// </summary>
 internal static class ResourcePreparer {
-    public static async Task EnsureAsync(MinecraftEntry entry, CancellationToken cancellationToken = default) {
-        var layout = entry.Layout ?? new Iridium.Launch.DefaultMinecraftLayoutFactory().Create(entry.Format);
-
-        using var downloader = new ResourceDownloader(DownloadSource.Official, layout: layout);
+    public static async Task EnsureAsync(MinecraftContext context, CancellationToken cancellationToken = default) {
+        using var downloader = new ResourceDownloader(DownloadSource.Official, context.Layout);
         var stopwatch = Stopwatch.StartNew();
 
         downloader.ProgressChanged += (_, args) => {
@@ -23,7 +21,7 @@ internal static class ResourcePreparer {
             Console.Write($"\r[{args.CompletedCount}/{args.TotalCount}] {args.Progress,6:P1}  {speed,6:F1} 文件/s{current}");
         };
 
-        var result = await downloader.DownloadAsync(entry, cancellationToken);
+        var result = await downloader.DownloadAsync(context.Entry, cancellationToken);
         stopwatch.Stop();
 
         Console.WriteLine();

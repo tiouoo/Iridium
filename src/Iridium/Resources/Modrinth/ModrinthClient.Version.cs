@@ -2,7 +2,7 @@ using System.Text.Json;
 using Iridium.Enums;
 using Iridium.Extensions;
 using Iridium.Utilities;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using ModrinthSearchResultContext = Iridium.Resources.Modrinth.ModrinthSearchResultContext;
 using ModrinthVersionContext = Iridium.Resources.Modrinth.ModrinthVersionContext;
 

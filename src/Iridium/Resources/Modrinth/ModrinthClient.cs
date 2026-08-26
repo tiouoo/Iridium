@@ -2,6 +2,7 @@ using Flurl;
 using Iridium.Download;
 using Iridium.Enums;
 using Iridium.Resources;
+using Iridium.Interfaces;
 
 namespace Iridium.Resources.Modrinth;
 

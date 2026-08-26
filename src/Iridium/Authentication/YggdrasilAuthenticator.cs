@@ -2,8 +2,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Flurl;
 using Flurl.Http;
-using Iridium.Authentication.Models;
-using Iridium.Authentication.Models.Yggdrasil;
+using Iridium.Models.Authentication;
+using Iridium.Models.Authentication.Yggdrasil;
 
 namespace Iridium.Authentication;
 

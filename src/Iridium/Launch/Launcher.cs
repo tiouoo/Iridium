@@ -1,30 +1,28 @@
 using System.Diagnostics;
 using System.Text;
-using Iridium.Download;
 using Iridium.Extensions;
 using Iridium.Installation;
-using Iridium.Launch;
-using Iridium.Launch.Models;
-using Iridium.Minecraft.Models;
+using Iridium.Models.Launch;
+using Iridium.Minecraft;
+using Iridium.Interfaces;
 
 namespace Iridium.Launch;
 
 public sealed class Launcher {
-    private readonly IMinecraftLayoutFactory _factory;
-    private readonly IMinecraftArgumentParser? _resolver;
+    private readonly IArgumentParser _parser;
 
-    public Launcher(IMinecraftLayoutFactory? factory = null, IMinecraftArgumentParser? resolver = null) {
-        _factory = factory ?? new DefaultMinecraftLayoutFactory();
-        _resolver = resolver;
+    public Launcher(IArgumentParser? parser = null) {
+        _parser = parser ?? new ArgumentParser();
     }
 
-    public async Task<MinecraftProcess> LaunchAsync(MinecraftEntry entry, LaunchConfig config, CancellationToken cancellationToken = default) {
-        ArgumentNullException.ThrowIfNull(entry);
+    public async Task<MinecraftProcess> LaunchAsync(MinecraftContext context, LaunchConfig config, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(config);
         if (config.JavaPath is null)
             throw new InvalidOperationException("JavaPath is required");
 
-        var layout = entry.Layout ?? _factory.Create(entry.Format);
+        var entry = context.Entry;
+        var layout = context.Layout;
         var directories = LaunchDirectories.Resolve(layout, entry, config);
 
         // Deploy the un-hashed ("virtual") asset layout before the argument parser resolves
@@ -34,8 +32,7 @@ public sealed class Launcher {
             .ReconstructAsync(entry, directories.GameDirectory, cancellationToken)
             .ConfigureAwait(false);
 
-        var resolver = _resolver ?? new StandardMinecraftArgumentParser(_factory);
-        var arguments = resolver.Build(entry, config);
+        var arguments = _parser.Build(context, config);
 
         if (arguments.Natives.Count > 0)
             await entry.ExtractNativesAsync(arguments.Natives, directories.NativesDirectory, cancellationToken: cancellationToken);

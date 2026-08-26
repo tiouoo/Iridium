@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Channels;
 using Flurl.Http;
-using Iridium.Download.Models;
+using Iridium.Models.Download;
 using Iridium.Resources;
 using Microsoft.Win32.SafeHandles;
 
@@ -16,7 +16,10 @@ public sealed class DefaultDownloader : IDisposable {
     private const int MultipartConcurrency = 16;
     private const int QueueMultiplier = 8;
     private const int BufferSize = 64 * 1024;
-    
+
+    /// <summary>Shared, stateless default downloader. Per-call concurrency is supplied per call.</summary>
+    public static DefaultDownloader Default { get; } = new();
+
     private readonly SemaphoreSlim _globalSemaphore;
     private readonly CancellationTokenSource _disposeCts;
 
@@ -51,7 +54,7 @@ public sealed class DefaultDownloader : IDisposable {
     
             for (var attempt = 0; attempt < _maxRetryCount; attempt++)
                 try {
-                     await DownloadFileAsync(request, null, linkedCts.Token)
+                     await DownloadFileAsync(request, null, _globalSemaphore, linkedCts.Token)
                          .ConfigureAwait(false);
     
                     request.Completed?.Invoke(EventArgs.Empty);
@@ -83,8 +86,19 @@ public sealed class DefaultDownloader : IDisposable {
             };
         }
     
-    public async Task<DownloadResponse> DownloadManyAsync(
+    public Task<DownloadResponse> DownloadManyAsync(
         IReadOnlyList<DownloadRequest> requests,
+        Action<ResourceDownloadProgressChangedEventArgs>? onProgress = null,
+        CancellationToken cancellationToken = default)
+        => DownloadManyAsync(requests, null, onProgress, cancellationToken);
+
+    /// <summary>
+    /// Downloads many files with an explicit per-call concurrency limit. <c>null</c> falls back
+    /// to the instance's default concurrency.
+    /// </summary>
+    internal async Task<DownloadResponse> DownloadManyAsync(
+        IReadOnlyList<DownloadRequest> requests,
+        int? maxConcurrency,
         Action<ResourceDownloadProgressChangedEventArgs>? onProgress = null,
         CancellationToken cancellationToken = default) {
         ThrowIfDisposed();
@@ -103,11 +117,17 @@ public sealed class DefaultDownloader : IDisposable {
             };
         }
 
+        var limit = Math.Max(1, maxConcurrency ?? _maxConcurrency);
+        using var perCallLimiter = maxConcurrency is { } concurrency
+            ? new SemaphoreSlim(Math.Max(1, concurrency), Math.Max(1, concurrency))
+            : null;
+        var limiter = perCallLimiter ?? _globalSemaphore;
+
         using var linkedCts = CancellationTokenSource
             .CreateLinkedTokenSource(cancellationToken, _disposeCts.Token);
 
         var progress = new DownloadProgress(requests.Count, onProgress);
-        var queueCapacity = Math.Clamp(checked(_maxConcurrency * QueueMultiplier), 32, 1024);
+        var queueCapacity = Math.Clamp(checked(limit * QueueMultiplier), 32, 1024);
 
         Channel<DownloadRequest> channel =
             Channel.CreateBounded<DownloadRequest>(
@@ -118,11 +138,11 @@ public sealed class DefaultDownloader : IDisposable {
                     AllowSynchronousContinuations = false
                 });
 
-        var workerCount = Math.Min(_maxConcurrency, requests.Count);
+        var workerCount = Math.Min(limit, requests.Count);
         Task[] workers = new Task[workerCount];
 
         for (var i = 0; i < workerCount; i++)
-            workers[i] = RunWorkerAsync(channel.Reader, progress, linkedCts.Token);
+            workers[i] = RunWorkerAsync(channel.Reader, progress, limiter, linkedCts.Token);
 
         try {
             foreach (var request in requests)
@@ -164,13 +184,14 @@ public sealed class DefaultDownloader : IDisposable {
     private async Task RunWorkerAsync(
         ChannelReader<DownloadRequest> reader,
         DownloadProgress progress,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
         var singlePartBuffer = ArrayPool<byte>.Shared.Rent(BufferSize);
 
         try {
             await foreach (var request in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) {
                 try {
-                    await DownloadInBatchAsync(request, progress, singlePartBuffer, cancellationToken)
+                    await DownloadInBatchAsync(request, progress, singlePartBuffer, limiter, cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
@@ -190,6 +211,7 @@ public sealed class DefaultDownloader : IDisposable {
         DownloadRequest request,
         DownloadProgress progress,
         byte[] singlePartBuffer,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
         var directory = Path.GetDirectoryName(request.FileInfo.FullName);
         if (!string.IsNullOrEmpty(directory))
@@ -199,7 +221,7 @@ public sealed class DefaultDownloader : IDisposable {
 
         for (var attempt = 0; attempt < _maxRetryCount; attempt++) {
             try {
-                await DownloadFileAsync(request, singlePartBuffer, cancellationToken)
+                await DownloadFileAsync(request, singlePartBuffer, limiter, cancellationToken)
                     .ConfigureAwait(false);
                 
                 progress.CompleteFile(request.FileInfo.Name);
@@ -224,12 +246,13 @@ public sealed class DefaultDownloader : IDisposable {
     private async Task DownloadFileAsync(
         DownloadRequest request,
         byte[]? singlePartBuffer,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
         var candidates = await ResolveCandidatesAsync(request, cancellationToken)
             .ConfigureAwait(false);
 
         if (candidates.Count == 1) {
-            await DownloadFileFromSourceAsync(candidates[0], request, singlePartBuffer, cancellationToken)
+            await DownloadFileFromSourceAsync(candidates[0], request, singlePartBuffer, limiter, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
@@ -238,7 +261,7 @@ public sealed class DefaultDownloader : IDisposable {
         for (var attempt = 0; attempt < SourceSelector.MaxAttempts; attempt++) {
             var url = candidates[attempt % candidates.Count];
             try {
-                await DownloadFileFromSourceAsync(url, request, singlePartBuffer, cancellationToken)
+                await DownloadFileFromSourceAsync(url, request, singlePartBuffer, limiter, cancellationToken)
                     .ConfigureAwait(false);
                 return;
             } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
@@ -280,13 +303,14 @@ public sealed class DefaultDownloader : IDisposable {
         string url,
         DownloadRequest request,
         byte[]? singlePartBuffer,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
         var directory = Path.GetDirectoryName(request.FileInfo.FullName);
 
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var preparation = await PrepareForDownloadAsync(url, cancellationToken)
+        var preparation = await PrepareForDownloadAsync(url, limiter, cancellationToken)
             .ConfigureAwait(false);
 
         var totalBytes = preparation.ContentLength ?? request.Size;
@@ -301,26 +325,27 @@ public sealed class DefaultDownloader : IDisposable {
             var supportsRange = preparation.SupportsRanges;
 
             if (!supportsRange)
-                supportsRange = await ValidateRangeSupportAsync(preparation.FinalUrl, cancellationToken)
+                supportsRange = await ValidateRangeSupportAsync(preparation.FinalUrl, limiter, cancellationToken)
                     .ConfigureAwait(false);
 
             if (supportsRange) {
-                await DownloadMultiPartAsync(context, cancellationToken)
+                await DownloadMultiPartAsync(context, limiter, cancellationToken)
                     .ConfigureAwait(false);
 
                 return;
             }
         }
 
-        await DownloadSinglePartAsync(context, singlePartBuffer, cancellationToken)
+        await DownloadSinglePartAsync(context, singlePartBuffer, limiter, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private async Task DownloadSinglePartAsync(
         DownloadContext context,
         byte[]? sharedBuffer,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
-        await _globalSemaphore.WaitAsync(cancellationToken)
+        await limiter.WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
         try {
@@ -380,18 +405,19 @@ public sealed class DefaultDownloader : IDisposable {
                     ArrayPool<byte>.Shared.Return(buffer);
             }
         } finally {
-            _globalSemaphore.Release();
+            limiter.Release();
         }
     }
 
     private async Task MultipartWorkerAsync(
         DownloadContext context,
         SafeFileHandle fileHandle,
+        SemaphoreSlim limiter,
         CancellationToken cancellationToken) {
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try {
             while (context.NextSegment() is var (start, end)) {
-                await _globalSemaphore
+                await limiter
                     .WaitAsync(cancellationToken)
                     .ConfigureAwait(false);
 
@@ -441,7 +467,7 @@ public sealed class DefaultDownloader : IDisposable {
                         throw new IOException(
                             $"The server returned an incomplete Range response. Expected {expectedBytes} bytes, but received {segmentBytes} bytes.");
                 } finally {
-                    _globalSemaphore.Release();
+                    limiter.Release();
                 }
             }
         } finally {
@@ -449,7 +475,7 @@ public sealed class DefaultDownloader : IDisposable {
         }
     }
     
-    private async Task DownloadMultiPartAsync(DownloadContext context, CancellationToken cancellationToken) {
+    private async Task DownloadMultiPartAsync(DownloadContext context, SemaphoreSlim limiter, CancellationToken cancellationToken) {
         if (context.TotalBytes <= 0)
             return;
 
@@ -472,14 +498,14 @@ public sealed class DefaultDownloader : IDisposable {
         Task[] workers = new Task[workerCount];
 
         for (var i = 0; i < workerCount; i++)
-            workers[i] = MultipartWorkerAsync(context, fileHandle, cancellationToken);
+            workers[i] = MultipartWorkerAsync(context, fileHandle, limiter, cancellationToken);
 
         await Task.WhenAll(workers)
             .ConfigureAwait(false);
     }
 
-    private async Task<DownloadPreparation> PrepareForDownloadAsync(string url, CancellationToken cancellationToken) {
-        await _globalSemaphore.WaitAsync(cancellationToken)
+    private async Task<DownloadPreparation> PrepareForDownloadAsync(string url, SemaphoreSlim limiter, CancellationToken cancellationToken) {
+        await limiter.WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
         try {
@@ -500,12 +526,12 @@ public sealed class DefaultDownloader : IDisposable {
 
             return new DownloadPreparation(finalUrl, contentLength, supportsRanges);
         } finally {
-            _globalSemaphore.Release();
+            limiter.Release();
         }
     }
 
-    private async Task<bool> ValidateRangeSupportAsync(string url, CancellationToken cancellationToken) {
-        await _globalSemaphore.WaitAsync(cancellationToken)
+    private async Task<bool> ValidateRangeSupportAsync(string url, SemaphoreSlim limiter, CancellationToken cancellationToken) {
+        await limiter.WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
         try {
@@ -522,7 +548,7 @@ public sealed class DefaultDownloader : IDisposable {
         } catch {
             return false;
         } finally {
-            _globalSemaphore.Release();
+            limiter.Release();
         }
     }
     

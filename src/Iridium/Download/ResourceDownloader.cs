@@ -1,37 +1,58 @@
+using System.Security.Cryptography;
 using System.Text.Json;
-using Iridium.Launch;
-using Iridium.Download.Models;
-using Iridium.Minecraft.Models;
 using Iridium.Minecraft;
+using Iridium.Models.Download;
+using Iridium.Models.Minecraft;
+using Iridium.Interfaces;
+using Iridium.Enums;
 
 namespace Iridium.Download;
 
 public sealed class ResourceDownloader : IDisposable {
     private readonly DownloadSource _source;
-    private readonly IMinecraftLayoutFactory _factory;
     private readonly IMinecraftLayout? _layout;
     private readonly DefaultDownloader _downloader;
+    private readonly int? _maxConcurrency;
     private readonly Action<ResourceDownloadProgressChangedEventArgs> _forwardProgress;
+    private readonly bool _ownsDownloader;
 
     private int _disposed;
-    
+
     public event EventHandler<ResourceDownloadProgressChangedEventArgs>? ProgressChanged;
-    
-    public ResourceDownloader(DownloadSource source, int maxConcurrency = 4, IMinecraftLayoutFactory? factory = null, IMinecraftLayout? layout = null) {
+
+    internal ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout, int? maxConcurrency) {
+        ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(layout);
 
         _source = source;
-        _factory = factory ?? new DefaultMinecraftLayoutFactory();
         _layout = layout;
+        _downloader = downloader;
+        _maxConcurrency = maxConcurrency;
+        _ownsDownloader = false;
         _forwardProgress = ForwardProgress;
-        _downloader = new DefaultDownloader(maxConcurrency);
+    }
+
+    public ResourceDownloader(DownloadSource source, IMinecraftLayout layout, int maxConcurrency = 4) {
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(layout);
+    
+            _source = source;
+            _layout = layout;
+            _ownsDownloader = true;
+            _forwardProgress = ForwardProgress;
+            _downloader = new DefaultDownloader(Math.Max(1, maxConcurrency));
+        }
+    
+    public ResourceDownloader(DefaultDownloader downloader, DownloadSource source, IMinecraftLayout layout)
+        : this(downloader, source, layout, null) {
     }
 
     public async Task<DownloadResponse> DownloadAsync(MinecraftEntry entry, CancellationToken cancellationToken = default) {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(entry);
 
-        var layout = _layout ?? _factory.Create(entry.Format);
+        var layout = _layout ?? throw new InvalidOperationException("A layout is required.");
         var files = ResolveFiles(entry, layout);
 
         DownloadFileEntry? assetIndex = null;
@@ -49,7 +70,7 @@ public sealed class ResourceDownloader : IDisposable {
         if (assetIndex is not null) {
             var indexResult = await _downloader.DownloadManyAsync([
                     BuildRequest(assetIndex)
-                ], _forwardProgress, cancellationToken)
+                ], _maxConcurrency, _forwardProgress, cancellationToken)
                 .ConfigureAwait(false);
 
             if (indexResult.FailCount > 0)
@@ -74,34 +95,35 @@ public sealed class ResourceDownloader : IDisposable {
             using var assetDoc = await JsonDocument.ParseAsync(assetStream, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (assetDoc.RootElement.TryGetProperty("objects", out var objects)) {
-                foreach (var asset in objects.EnumerateObject()) {
-                    var hash = asset.Value.GetProperty("hash")
-                        .GetString()!;
+        if (assetDoc.RootElement.TryGetProperty("objects", out var objects)) {
+            foreach (var asset in objects.EnumerateObject()) {
+                var hash = asset.Value.GetProperty("hash")
+                    .GetString()!;
 
-                    var size = asset.Value.TryGetProperty("size", out var sizeElement) 
-                        ? sizeElement.GetInt64()
-                        : 0L;
+                var size = asset.Value.TryGetProperty("size", out var sizeElement)
+                    ? sizeElement.GetInt64()
+                    : 0L;
 
-                    var assetPath = Path.Combine(assetsRoot, "objects", hash[..2], hash);
+                var assetPath = Path.Combine(assetsRoot, "objects", hash[..2], hash);
 
-                    if (File.Exists(assetPath))
-                        continue;
+                if (!NeedsDownload(assetPath, size, hash))
+                    continue;
 
-                    var assetEntry = new DownloadFileEntry {
-                        Type = DownloadFileType.Asset,
-                        Hash = hash
-                    };
+                var assetEntry = new DownloadFileEntry {
+                    Type = DownloadFileType.Asset,
+                    Hash = hash
+                };
 
-                    files.Add(new DownloadFileEntry {
-                        Type = DownloadFileType.Asset,
-                        LocalPath = assetPath,
-                        Hash = hash,
-                        Size = size,
-                        Url = _source.GetUrl(assetEntry)
-                    });
-                }
+                files.Add(new DownloadFileEntry {
+                    Type = DownloadFileType.Asset,
+                    LocalPath = assetPath,
+                    Hash = hash,
+                    Sha1 = hash,
+                    Size = size,
+                    Url = _source.GetUrl(assetEntry)
+                });
             }
+        }
         }
 
         if (files.Count == 0)
@@ -110,19 +132,18 @@ public sealed class ResourceDownloader : IDisposable {
             };
 
         var downloadRequests = new List<DownloadRequest>(files.Count);
+        downloadRequests.AddRange(files.Select(BuildRequest));
 
-        foreach (var file in files)
-            downloadRequests.Add(BuildRequest(file));
-
-        return await _downloader.DownloadManyAsync(downloadRequests, _forwardProgress, cancellationToken)
+        return await _downloader.DownloadManyAsync(downloadRequests, _maxConcurrency, _forwardProgress, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private static DownloadRequest BuildRequest(DownloadFileEntry file) {
+private static DownloadRequest BuildRequest(DownloadFileEntry file) {
         var request = new DownloadRequest {
             Url = file.Url,
             LocalPath = file.LocalPath,
-            Size = file.Size
+            Size = file.Size,
+            Sha1 = file.Sha1
         };
 
         if (file.Type != DownloadFileType.AssetIndex && IsMojangHosted(file.Url)) {
@@ -134,16 +155,15 @@ public sealed class ResourceDownloader : IDisposable {
         return request;
     }
 
-    private List<DownloadFileEntry> ResolveFiles(
-        MinecraftEntry entry,
-        IMinecraftLayout layout) {
+    private List<DownloadFileEntry> ResolveFiles(MinecraftEntry entry, IMinecraftLayout layout) {
         var files = new List<DownloadFileEntry>(entry.Libraries.Count + 64);
         var librariesRoot = layout.GetLibrariesRoot(entry);
         var assetsRoot = layout.GetAssetsRoot(entry);
 
         var versionJarPath = layout.GetVersionJarPath(entry);
 
-        if (!File.Exists(versionJarPath) && entry.ClientDownload is { Url.Length: > 0 } client) {
+        if (entry.ClientDownload is { Url.Length: > 0 } client &&
+            NeedsDownload(versionJarPath, client.Size, client.Sha1)) {
             files.Add(new DownloadFileEntry {
                 Type = DownloadFileType.ClientJar,
                 LocalPath = versionJarPath,
@@ -162,10 +182,13 @@ public sealed class ResourceDownloader : IDisposable {
 
             var mavenPath = ResolveLibraryPath(librariesRoot, library);
 
-            if (mavenPath is null || File.Exists(mavenPath))
+            if (mavenPath is null)
                 continue;
 
             if (!VersionArgumentRuleParser.IsActive(library.Rules, []))
+                continue;
+
+            if (!NeedsDownload(mavenPath, library.Size, library.Sha1))
                 continue;
 
             var relativePath = Path
@@ -180,18 +203,23 @@ public sealed class ResourceDownloader : IDisposable {
             files.Add(new DownloadFileEntry {
                 Type = DownloadFileType.Library,
                 LocalPath = mavenPath,
-                Url = ResolveLibraryUrl(library.Url, libEntry)
+                Url = ResolveLibraryUrl(library.Url, libEntry),
+                Size = library.Size,
+                Sha1 = library.Sha1
             });
         }
 
         var assetIndexId = entry.AssetIndex?.Id ?? entry.Id;
         var assetIndexPath = Path.Combine(assetsRoot, "indexes", $"{assetIndexId}.json");
 
-        if (!File.Exists(assetIndexPath) && entry.AssetIndexUrl is { Length: > 0 } url) {
+        if (entry.AssetIndexUrl is { Length: > 0 } url &&
+            NeedsDownload(assetIndexPath, entry.AssetIndex?.Size ?? 0, entry.AssetIndex?.Sha1)) {
             files.Add(new DownloadFileEntry {
                 Type = DownloadFileType.AssetIndex,
                 LocalPath = assetIndexPath,
                 Url = url,
+                Size = entry.AssetIndex?.Size ?? 0,
+                Sha1 = entry.AssetIndex?.Sha1,
                 VersionId = assetIndexId
             });
         }
@@ -203,11 +231,40 @@ public sealed class ResourceDownloader : IDisposable {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _downloader.Dispose();
+        if (_ownsDownloader)
+            _downloader.Dispose();
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
     
+    private static bool NeedsDownload(string localPath, long size, string? sha1) {
+        if (!File.Exists(localPath))
+            return true;
+
+        var info = new FileInfo(localPath);
+        if (size > 0 && info.Length != size)
+            return true;
+
+        if (!string.IsNullOrEmpty(sha1) && !FileSha1Matches(localPath, sha1))
+            return true;
+
+        return false;
+    }
+
+    private static bool FileSha1Matches(string path, string expected) {
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            64 * 1024,
+            FileOptions.SequentialScan);
+
+        using var sha1 = SHA1.Create();
+        var hash = sha1.ComputeHash(stream);
+        return string.Equals(Convert.ToHexStringLower(hash), expected, StringComparison.Ordinal);
+    }
+
     private void ForwardProgress(ResourceDownloadProgressChangedEventArgs args) => ProgressChanged?.Invoke(this, args);
 
     private static IEnumerable<MinecraftLibrary> EnumerateLibraries(MinecraftEntry entry) {
@@ -236,7 +293,7 @@ public sealed class ResourceDownloader : IDisposable {
 
         var nativeName = $"{library.Name}:{classifier}";
         var nativePath = MavenPathParser.Resolve(librariesRoot, nativeName);
-        if (nativePath is null || File.Exists(nativePath))
+        if (nativePath is null || !NeedsDownload(nativePath, 0, null))
             return;
 
         var relativePath = Path

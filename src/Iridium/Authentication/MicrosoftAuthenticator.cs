@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Flurl.Http;
-using Iridium.Authentication.Models;
-using Iridium.Authentication.Models.Microsoft;
+using Iridium.Models.Authentication;
+using Iridium.Models.Authentication.Microsoft;
 
 namespace Iridium.Authentication;
 

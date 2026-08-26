@@ -1,7 +1,7 @@
 using Iridium.Enums;
 using Iridium.Extensions;
 using Iridium.Utilities;
-using Iridium.Resources.Models;
+using Iridium.Models.Resources;
 using ModrinthTagContext = Iridium.Resources.Modrinth.ModrinthTagContext;
 
 namespace Iridium.Resources.Modrinth;
