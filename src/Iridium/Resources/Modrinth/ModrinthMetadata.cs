@@ -12,6 +12,7 @@ public record ModrinthLicense {
 
 public record ModrinthGalleryItem {
     [JsonPropertyName("url")] public string? Url { get; init; }
+    [JsonPropertyName("raw_url")] public string? RawUrl { get; init; }
     [JsonPropertyName("title")] public string? Title { get; init; }
     [JsonPropertyName("description")] public string? Description { get; init; }
 

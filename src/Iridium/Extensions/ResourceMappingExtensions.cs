@@ -56,8 +56,9 @@ public static class ResourceMappingExtensions {
             GameVersions = project.GameVersions,
             Loaders = project.Loaders.Select(ToResourceLoaderType)
                 .Where(loader => loader.HasValue).Select(loader => loader!.Value).Distinct().ToArray(),
-            Screenshots = project.Gallery.Select(gallery => gallery.Url)
-                .Where(url => url is not null).Cast<string>().ToArray(),
+            Screenshots = project.Gallery
+                .Where(gallery => gallery.Url is not null)
+                .Select(gallery => new ResourceScreenshotInfo(gallery.Url!, gallery.Title, gallery.RawUrl)).ToArray(),
             LicenseId = project.License?.Id,
             WebsiteUrl = project.Slug is null ? null : ResourceUrlHelper.BuildModrinthWebsiteUrl(type.ToModrinthProjectType(), project.Slug)
         };
@@ -160,8 +161,10 @@ public static class ResourceMappingExtensions {
                 .Where(loader => loader.HasValue)
                 .Select(loader => ParseCurseForgeLoader(loader!.Value))
                 .Where(loader => loader.HasValue).Select(loader => loader!.Value).Distinct().ToArray(),
-            Screenshots = project.Screenshots.Select(screenshot => screenshot.Url ?? screenshot.ThumbnailUrl)
-                .Where(url => url is not null).Cast<string>().ToArray(),
+            Screenshots = project.Screenshots
+                .Select(screenshot => (screenshot.Url ?? screenshot.ThumbnailUrl, Title: null as string))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Item1))
+                .Select(item => new ResourceScreenshotInfo(item.Item1!, item.Title)).ToArray(),
             WebsiteUrl = project.Links?.WebsiteUrl
         };
     }

@@ -26,8 +26,10 @@ public sealed record ResourceProject {
     public DateTime? DateModified { get; init; }
 
     public IReadOnlyList<string> GameVersions { get; init; } = [];
-    public IReadOnlyList<string> Screenshots { get; init; } = [];
+    public IReadOnlyList<ResourceScreenshotInfo> Screenshots { get; init; } = [];
 
     public IReadOnlyList<ResourceCategory> Categories { get; init; } = [];
     public IReadOnlyList<ResourceLoaderType> Loaders { get; init; } = [];
 }
+
+public sealed record ResourceScreenshotInfo(string Url, string? Title, string? FullUrl = null);
