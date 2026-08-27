@@ -11,6 +11,8 @@ namespace Iridium.Minecraft.Formats;
 /// <c>versions/</c> directory ({root}/versions/{id}/{id}.json).
 /// </summary>
 public sealed class StandardMinecraftProvider : IFormatProvider {
+    private const int MaxScanConcurrency = 2;
+
     public string Id => "Standard";
 
     public int Priority => 100;
@@ -32,14 +34,18 @@ public sealed class StandardMinecraftProvider : IFormatProvider {
         if (!versionsDir.Exists)
             return [];
 
-        var contexts = new List<MinecraftContext>();
-        foreach (var dir in versionsDir.EnumerateDirectories()) {
-            var entry = await ParseAsync(dir, root.FullName, ct);
-            if (entry is not null)
-                contexts.Add(Wrap(dir, entry));
-        }
+        var directories = versionsDir.EnumerateDirectories().ToArray();
+        var contexts = new MinecraftContext?[directories.Length];
+        await Parallel.ForEachAsync(Enumerable.Range(0, directories.Length),
+            new ParallelOptions { MaxDegreeOfParallelism = MaxScanConcurrency, CancellationToken = ct },
+            async (index, cancellationToken) => {
+                var dir = directories[index];
+                var entry = await ParseAsync(dir, root.FullName, cancellationToken);
+                if (entry is not null)
+                    contexts[index] = Wrap(dir, entry);
+            });
 
-        return contexts;
+        return contexts.OfType<MinecraftContext>().ToArray();
     }
 
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {

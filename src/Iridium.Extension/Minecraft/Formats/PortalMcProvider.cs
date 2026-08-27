@@ -16,6 +16,8 @@ namespace Iridium.Extension.Minecraft.Formats;
 /// instance manifest itself.
 /// </summary>
 public sealed class PortalMcProvider : IFormatProvider {
+    private const int MaxScanConcurrency = 2;
+
     public string Id => "PortalMc";
 
     public int Priority => 80;
@@ -58,14 +60,18 @@ public sealed class PortalMcProvider : IFormatProvider {
         if (!Directory.Exists(instancesRoot))
             return [];
 
-        var contexts = new List<MinecraftContext>();
-        foreach (var dir in Directory.EnumerateDirectories(instancesRoot)) {
-            var entry = await ParseAsync(dir, root.FullName, ct);
-            if (entry is not null)
-                contexts.Add(Wrap(new DirectoryInfo(dir), entry));
-        }
+        var directories = Directory.EnumerateDirectories(instancesRoot).ToArray();
+        var contexts = new MinecraftContext?[directories.Length];
+        await Parallel.ForEachAsync(Enumerable.Range(0, directories.Length),
+            new ParallelOptions { MaxDegreeOfParallelism = MaxScanConcurrency, CancellationToken = ct },
+            async (index, cancellationToken) => {
+                var dir = directories[index];
+                var entry = await ParseAsync(dir, root.FullName, cancellationToken);
+                if (entry is not null)
+                    contexts[index] = Wrap(new DirectoryInfo(dir), entry);
+            });
 
-        return contexts;
+        return contexts.OfType<MinecraftContext>().ToArray();
     }
 
     private static MinecraftContext Wrap(DirectoryInfo dir, MinecraftEntry entry) => new() {
